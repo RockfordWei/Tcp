@@ -202,3 +202,83 @@ size_t TcpSocket::recv(bool peek) {
         default: throw runtime_error("Unknown error when recv(): " + to_string(errno));
     }
 }
+void TcpSocket::setDelegate(const TcpServerSocketDelegate *delegate) {
+    _delegate = (TcpServerSocketDelegate *)delegate;
+}
+void TcpSocket::select(const int timeoutSeconds) {
+    fd_set readfds, errorfds;
+    FD_ZERO(&readfds);
+    FD_ZERO(&errorfds);
+    FD_SET(_socket, &readfds);
+    FD_SET(_socket, &errorfds);
+    int largest = _socket;
+    for(auto client: _clients) {
+        int sck = client._socket;
+        if (sck > largest) largest = sck;
+        FD_SET(sck, &readfds);
+        FD_SET(sck, &errorfds);
+    }
+    largest++;
+#if __APPLE__
+    if (largest > FD_SETSIZE) largest = FD_SETSIZE;
+#endif
+    struct timeval timeout;
+    timeout.tv_sec = timeoutSeconds;
+    timeout.tv_usec = 0;
+    int result = ::select(largest, &readfds, NULL, &errorfds, &timeout);
+    if (0 == result) return;
+    if (-1 == result) {
+        switch (errno) {
+            case EBADF: throw runtime_error("An invalid file descriptor was given in one of the sets. (Perhaps a file descriptor that was already closed, or one on which an error has occurred.)  However, see BUGS.");
+            case EINTR: throw runtime_error("A signal was caught; see signal(7).");
+            case EINVAL: throw runtime_error("nfds is negative or exceeds the RLIMIT_NOFILE resource limit (see getrlimit(2)).");
+            case ENOMEM: throw runtime_error("Unable to allocate memory for internal tables.");
+            default: throw runtime_error("Unknown error when select(): " + to_string(errno));
+        }
+    }
+    if (FD_ISSET(_socket, &errorfds)) {
+        throw runtime_error("server socket failure");
+    }
+    if (FD_ISSET(_socket, &readfds)) {
+        try {
+            auto client = accept();
+            _clients.push_back(client);
+        } catch (runtime_error exception) {
+            cerr << "accept() failed: " << exception.what() << endl;
+        }
+    }
+    for(auto client: _clients) {
+        int sck = client._socket;
+        if (FD_ISSET(sck, &errorfds)) {
+            _clients.remove(client);
+        } else if (FD_ISSET(sck, &readfds)) {
+            try {
+                size_t result = client.recv(false);
+                if (0 == result) {
+                    if (_delegate) {
+                        auto response = _delegate->respond(client._buffer);
+                        if (response) {
+                            if (response->size() > 0) {
+                                client.send(*response);
+                            } else {
+                                // pending new data if giving an empty data
+                            }
+                        } else {
+                            _clients.remove(client);
+                        }
+                    }
+                } else {
+                    // pending more data until reading completed
+                }
+            } catch(runtime_error exception) {
+                _clients.remove(client);
+            }
+        }
+    }
+}
+bool TcpSocket::equal(const TcpSocket& to) const {
+    return _socket == to._socket;
+}
+bool operator == (const TcpSocket& me, const TcpSocket& other) {
+    return me.equal(other);
+}
