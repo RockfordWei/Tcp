@@ -202,10 +202,7 @@ size_t TcpSocket::recv(bool peek) {
         default: throw runtime_error("Unknown error when recv(): " + to_string(errno));
     }
 }
-void TcpSocket::setDelegate(const TcpServerSocketDelegate *delegate) {
-    _delegate = (TcpServerSocketDelegate *)delegate;
-}
-void TcpSocket::select(const int timeoutSeconds) {
+void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
     fd_set readfds, errorfds;
     FD_ZERO(&readfds);
     FD_ZERO(&errorfds);
@@ -255,26 +252,24 @@ void TcpSocket::select(const int timeoutSeconds) {
             try {
                 size_t result = client.recv(false);
                 if (0 == result) {
-                    if (_delegate) {
-                        auto response = _delegate->respond(client._buffer);
-                        if (response) {
-                            if (response->size() > 0) {
-                                client.send(*response);
-                            } else {
-                                // pending new data if giving an empty data
-                            }
-                        } else {
-                            _clients.remove(client);
-                        }
-                    }
-                } else {
-                    // pending more data until reading completed
+                    auto response = handler(client._buffer);
+                    client.send(response);
+                    _clients.remove(client);
                 }
             } catch(runtime_error exception) {
                 _clients.remove(client);
             }
         }
     }
+}
+void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
+    _live = true;
+    while(_live) {
+        select(timeoutSeconds, handler);
+    }
+}
+void TcpSocket::terminate() {
+    _live = false;
 }
 bool TcpSocket::equal(const TcpSocket& to) const {
     return _socket == to._socket;
