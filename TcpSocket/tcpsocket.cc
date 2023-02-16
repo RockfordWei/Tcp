@@ -4,7 +4,7 @@
 //
 //  Created by Rocky Wei on 2/15/23.
 //
-
+#define szBUF 4096
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -12,19 +12,14 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/fcntl.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <iostream>
-#include <list>
-#include <set>
-#include <string>
-using namespace std;
-
 #include "tcpsocket.h"
-
 TcpSocket::TcpSocket() {
     cerr << "socket()" << endl;
-    memset(_ip, 0, szIP);
     _port = 0;
     _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (-1 != _socket) return;
@@ -40,10 +35,10 @@ TcpSocket::TcpSocket() {
         default: throw runtime_error("Unknown error when socket(): " + to_string(errno));
     }
 }
-TcpSocket::TcpSocket(const int fd, const char * ip, const int port) {
+TcpSocket::TcpSocket(const int fd, const string ip, const int port) {
     cerr << "socket::copy()" << endl;
     if (fd < 1) throw runtime_error("invalid socket fd");
-    if (ip) strcpy(_ip, ip);
+    _ip = ip;
     _port = port;
 }
 TcpSocket::~TcpSocket() {
@@ -80,17 +75,17 @@ void TcpSocket::reuse() {
         case EINVAL: throw runtime_error("optlen invalid in setsockopt(). In some cases this error can also occur for an invalid value in optval (e.g., for the IP_ADD_MEMBERSHIP option described in ip(7)).");
         case ENOPROTOOPT: throw runtime_error("The option is unknown at the level indicated.");
         case ENOTSOCK: throw runtime_error("The argument sockfd is a file, not a socket.");
-        default: throw runtime_error("Unknown error when setsockopt()");
+        default: throw runtime_error("Unknown error when setsockopt(): " + to_string(errno));
     }
 }
-void TcpSocket::bind(const char * ip, const int port) {
+void TcpSocket::bind(const string ip, const int port) {
     cerr << "bind()" << endl;
-    if (ip) strcpy(_ip, ip);
+    _ip = ip;
     _port = port;
     struct sockaddr_in host;
     memset(&host, 0, sizeof(host));
     host.sin_family = AF_INET;
-    host.sin_addr.s_addr = ip ? inet_addr(ip) : INADDR_ANY;
+    host.sin_addr.s_addr = inet_addr(ip.c_str());
     host.sin_port = htons(port);
     socklen_t sizeSocket = sizeof(host);
     int result = ::bind(_socket, (const struct sockaddr *)&host, sizeSocket);
@@ -109,7 +104,7 @@ void TcpSocket::bind(const char * ip, const int port) {
         case ENOMEM: throw runtime_error("Insufficient kernel memory was available.");
         case ENOTDIR: throw runtime_error("A component of the path prefix is not a directory.");
         case EROFS: throw runtime_error("The socket inode would reside on a read-only filesystem.");
-        default: throw runtime_error("Unknown error when bind()");
+        default: throw runtime_error("Unknown error when bind(): " + to_string(errno));
     }
 }
 void TcpSocket::listen() {
@@ -121,7 +116,7 @@ void TcpSocket::listen() {
         case EBADF: throw runtime_error("The argument sockfd is not a valid file descriptor.");
         case ENOTSOCK: throw runtime_error("The file descriptor sockfd does not refer to a socket.");
         case EOPNOTSUPP: throw runtime_error("The socket is not of a type that supports the listen() operation.");
-        default: throw runtime_error("Unknown error when listen()");
+        default: throw runtime_error("Unknown error when listen(): " + to_string(errno));
     }
 }
 TcpSocket TcpSocket::accept() {
@@ -142,11 +137,68 @@ TcpSocket TcpSocket::accept() {
         case EMFILE: throw runtime_error("The per-process limit on the number of open file descriptors has been reached.");
         case ENFILE: throw runtime_error("The system-wide limit on the total number of open files has been reached.");
         case ENOBUFS:
-        case ENOMEM: throw runtime_error("Not enough free memory.  This often means that the memory allocation is limited by the socket buffer limits, not by the system memory.");
+        case ENOMEM: throw runtime_error("Not enough free memory. This often means that the memory allocation is limited by the socket buffer limits, not by the system memory.");
         case ENOTSOCK: throw runtime_error("The file descriptor sockfd does not refer to a socket.");
         case EOPNOTSUPP: throw runtime_error("The referenced socket is not of type SOCK_STREAM.");
         case EPERM: throw runtime_error("Firewall rules forbid connection.");
         case EPROTO: throw runtime_error("Protocol error.");
-        default: throw runtime_error("Unknown error when accept()");
+        default: throw runtime_error("Unknown error when accept(): " + to_string(errno));
+    }
+}
+void TcpSocket::send(const void * data, const size_t size) {
+    cerr << "send()" << endl;
+    if (!data || size < 1) throw runtime_error("invalid data buffer");
+    ssize_t result = ::send(_socket, data, size, 0);
+    if (-1 != result) return;
+    switch (errno) {
+        case EACCES: throw runtime_error("(For UNIX domain sockets, which are identified by pathname) Write permission is denied on the destination socket file, or search permission is denied for one of the directories the path prefix.  (See path_resolution(7).) (For UDP sockets) An attempt was made to send to a network/broadcast address as though it was a unicast address.");
+        case EAGAIN: throw runtime_error("The socket is marked nonblocking and the requested operation would block.  POSIX.1-2001 allows either error to be returned for this case, and does not require these constants to have the same value, so a portable application should check for both possibilities.");
+        case EALREADY: throw runtime_error("Another Fast Open is in progress.");
+        case EBADF: throw runtime_error("sockfd is not a valid open file descriptor.");
+        case ECONNRESET: throw runtime_error("Connection reset by peer.");
+        case EDESTADDRREQ: throw runtime_error("The socket is not connection-mode, and no peer address is set.");
+        case EFAULT: throw runtime_error("An invalid user space address was specified for an argument.");
+        case EINTR: throw runtime_error("A signal occurred before any data was transmitted; see signal(7).");
+        case EINVAL: throw runtime_error("Invalid argument passed.");
+        case EISCONN: throw runtime_error("The connection-mode socket was connected already but a recipient was specified.  (Now either this error is returned, or the recipient specification is ignored.)");
+        case EMSGSIZE: throw runtime_error("The socket type requires that message be sent atomically, and the size of the message to be sent made this impossible.");
+        case ENOBUFS: throw runtime_error("The output queue for a network interface was full. This generally indicates that the interface has stopped sending, but may be caused by transient congestion. (Normally, this does not occur in Linux.  Packets are just silently dropped when a device queue overflows.)");
+        case ENOMEM: throw runtime_error("No memory available.");
+        case ENOTCONN: throw runtime_error("The socket is not connected, and no target has been given.");
+        case ENOTSOCK: throw runtime_error("The file descriptor sockfd does not refer to a socket.");
+        case EOPNOTSUPP: throw runtime_error("Some bit in the flags argument is inappropriate for the socket type.");
+        case EPIPE: throw runtime_error("The local end has been shut down on a connection oriented socket.  In this case, the process will also receive a SIGPIPE unless MSG_NOSIGNAL is set.");
+        default: throw runtime_error("Unknown error when send(): " + to_string(errno));
+    }
+}
+void TcpSocket::send(const vector<unsigned char> data) {
+    send(data.data(), data.size());
+}
+void TcpSocket::send(const string content) {
+    send(content.c_str(), content.size());
+}
+size_t TcpSocket::recv(bool peek) {
+    unsigned char * buffer = (unsigned char *)malloc(szBUF);
+    memset(buffer, 0, szBUF);
+    size_t size = ::recv(_socket, buffer, szBUF, peek ? MSG_PEEK : 0);
+    if (size > 0) {
+        for(size_t i = 0; i < size; i++) {
+            _buffer.push_back(buffer[i]);
+        }
+    }
+    free(buffer);
+    if (size == 0) ::shutdown(_socket, SHUT_RD);
+    if (size >= 0) return size;
+    switch (errno) {
+        case EAGAIN: throw runtime_error("The socket is marked nonblocking and the receive operation would block, or a receive timeout had been set and the timeout expired before data was received.  POSIX.1 allows either error to be returned for this case, and does not require these constants to have the same value, so a portable application should check for both possibilities.");
+        case EBADF: throw runtime_error("The argument sockfd is an invalid file descriptor.");
+        case ECONNREFUSED: throw runtime_error("A remote host refused to allow the network connection (typically because it is not running the requested service).");
+        case EFAULT: throw runtime_error("The receive buffer pointer(s) point outside the process's address space.");
+        case EINTR: throw runtime_error("The receive was interrupted by delivery of a signal before any data was available; see signal(7).");
+        case EINVAL: throw runtime_error("Invalid argument passed.");
+        case ENOMEM: throw runtime_error("Could not allocate memory for recvmsg().");
+        case ENOTCONN: throw runtime_error("The socket is associated with a connection-oriented protocol and has not been connected (see connect(2) and accept(2)).");
+        case ENOTSOCK: throw runtime_error("The file descriptor sockfd does not refer to a socket.");
+        default: throw runtime_error("Unknown error when recv(): " + to_string(errno));
     }
 }
