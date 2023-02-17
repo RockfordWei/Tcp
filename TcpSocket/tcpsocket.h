@@ -8,21 +8,23 @@
 #ifndef tcpsocket_h
 #define tcpsocket_h
 #include <iostream>
-#include <list>
+#include <set>
 #include <string>
 #include <vector>
 using namespace std;
-typedef vector<unsigned char> (*TcpSessionHandler)(const vector<unsigned char>);
+typedef vector<unsigned char> (*TcpSessionHandler)(const int, const vector<unsigned char>);
 class TcpSocket {
 public:
     TcpSocket();
     TcpSocket(const int fd, const string ip, const int port);
     ~TcpSocket();
+    void shutdown(const int method);
+    void close();
     void unblock();
     void reuse();
     void bind(const string ip, const int port);
     void listen();
-    TcpSocket accept();
+    TcpSocket * accept();
     void send(const void * data, const size_t size);
     void send(const vector<unsigned char> data);
     void send(const string content);
@@ -31,11 +33,15 @@ public:
     bool equal(const TcpSocket& to) const;
     void run(const int timeoutSeconds, TcpSessionHandler handler);
     void terminate();
+    void setup(ostream * errorLog);
+    void log(const string message);
+    void clean();
 protected:
     int _socket;
+    ostream * _errorLog;
     string _ip;
     int _port;
-    list<TcpSocket> _clients;
+    set<TcpSocket *> _clients;
     vector<unsigned char> _buffer;
     bool _live;
 };

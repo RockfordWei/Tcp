@@ -9,15 +9,16 @@
 #include "tcpsocket.h"
 using namespace std;
 
-vector<unsigned char> echoResponse(const vector <unsigned char> request) {
+vector<unsigned char> echoResponse(const int identifier, const vector <unsigned char> request) {
     return request;
 }
 int main(int argc, const char * argv[]) {
     try {
         auto server = TcpSocket();
+        server.setup(&cerr);
         server.unblock();
         server.reuse();
-        server.bind("127.0.0.1", 8080);
+        server.bind("0.0.0.0", 8080);
         server.listen();
         cout << "ready" << endl;
         server.run(1, &echoResponse);
