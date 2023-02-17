@@ -38,6 +38,7 @@ TcpSocket::TcpSocket() {
 TcpSocket::TcpSocket(const int fd, const string ip, const int port) {
     _errorLog = &cerr;
     if (fd < 1) throw runtime_error("invalid socket fd");
+    _socket = fd;
     _ip = ip;
     _port = port;
 }
@@ -45,31 +46,15 @@ void TcpSocket::setup(ostream *errorLog) {
     _errorLog = errorLog ? errorLog : &cerr;
 }
 void TcpSocket::log(const string message) {
-    *_errorLog << endl << "#" << _socket << ":\t" << message << endl;
+    *_errorLog << endl << "#" << _socket << ":\t" << message;
 }
 void TcpSocket::shutdown(const int method) {
     log("shutdown()");
-    int result = ::shutdown(_socket, method);
-    if (-1 != result) return;
-    switch (errno) {
-        case EBADF: throw runtime_error("The socket argument is not a valid file descriptor.");
-        case EINVAL: throw runtime_error("The how argument is invalid.");
-        case ENOTCONN: throw runtime_error("The socket is not connected.");
-        case ENOTSOCK: throw runtime_error("The socket argument does not refer to a socket.");
-        case ENOBUFS: throw runtime_error("Insufficient resources were available in the system to perform the operation.");
-        default: throw runtime_error("Unknown error when shutdown(): " + to_string(errno));
-    }
+    ::shutdown(_socket, method);
 }
 void TcpSocket::close() {
     log("close()");
-    int result = ::close(_socket);
-    if (-1 != result) return;
-    switch (errno) {
-        case EBADF: throw runtime_error("The fildes argument is not a valid file descriptor.");
-        case EINTR: throw runtime_error("The close() function was interrupted by a signal.");
-        case EIO: throw runtime_error("An I/O error occurred while reading from or writing to the file system.");
-        default: throw runtime_error("Unknown error when close(): " + to_string(errno));
-    }
+    ::close(_socket);
 }
 TcpSocket::~TcpSocket() { }
 void TcpSocket::unblock() {
@@ -150,6 +135,7 @@ TcpSocket TcpSocket::accept() {
     socklen_t size = sizeof(address);
     int fd = ::accept(_socket, (struct sockaddr *)&address, &size);
     if (fd > 0) {
+        log(string("incoming: " + to_string(fd)));
         return TcpSocket(fd, inet_ntoa(address.sin_addr), htons(address.sin_port));
     }
     switch (errno) {
@@ -228,15 +214,19 @@ size_t TcpSocket::recv(bool peek) {
     }
 }
 void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
+    log("preparing");
     fd_set readfds, errorfds;
     FD_ZERO(&readfds);
     FD_ZERO(&errorfds);
+    log("setup server fd");
     FD_SET(_socket, &readfds);
     FD_SET(_socket, &errorfds);
-    int largest = _socket;
+    auto largest = _socket;
+    log("checking clients");
     for(auto client: _clients) {
-        int sck = client._socket;
+        auto sck = client._socket;
         if (sck > largest) largest = sck;
+        client.log("setup client");
         FD_SET(sck, &readfds);
         FD_SET(sck, &errorfds);
     }
@@ -247,16 +237,19 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
     struct timeval timeout;
     timeout.tv_sec = timeoutSeconds;
     timeout.tv_usec = 0;
+    string message;
+    log("select()");
     int result = ::select(largest, &readfds, NULL, &errorfds, &timeout);
-    if (0 == result) return;
+    if (result == 0) return;
     if (-1 == result) {
         switch (errno) {
-            case EBADF: throw runtime_error("An invalid file descriptor was given in one of the sets. (Perhaps a file descriptor that was already closed, or one on which an error has occurred.)  However, see BUGS.");
-            case EINTR: throw runtime_error("A signal was caught; see signal(7).");
-            case EINVAL: throw runtime_error("nfds is negative or exceeds the RLIMIT_NOFILE resource limit (see getrlimit(2)).");
-            case ENOMEM: throw runtime_error("Unable to allocate memory for internal tables.");
-            default: throw runtime_error("Unknown error when select(): " + to_string(errno));
+            case EBADF: message = "An invalid file descriptor was given in one of the sets. (Perhaps a file descriptor that was already closed, or one on which an error has occurred.)  However, see BUGS.";
+            case EINVAL: message = "nfds is negative or exceeds the RLIMIT_NOFILE resource limit (see getrlimit(2)).";
+            case ENOMEM: message = "Unable to allocate memory for internal tables.";
+            case EINTR: message = "A signal was caught; see signal(7)";
+            default: message = "Unknown error when select(): " + to_string(errno);
         }
+        log(message);
     }
     if (FD_ISSET(_socket, &errorfds)) {
         throw runtime_error("server socket failure");
@@ -267,26 +260,26 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
         _clients.push_back(client);
     }
     for(auto client: _clients) {
-        int sck = client._socket;
+        auto sck = client._socket;
+        client.log("checking");
         if (FD_ISSET(sck, &errorfds)) {
+            client.log("error raised, closing");
             client.shutdown(SHUT_RDWR);
             client.close();
-            _clients.remove(client);
+            // _clients.remove(client);
         } else if (FD_ISSET(sck, &readfds)) {
+            client.log("reading");
             try {
                 size_t result = client.recv(false);
-                if (0 == result) {
-                    client.shutdown(SHUT_RD);
+                if (result >= 0) {
                     auto response = handler(client._buffer);
                     client.send(response);
-                    client.shutdown(SHUT_WR);
-                    client.close();
-                    _clients.remove(client);
                 }
-            } catch(runtime_error exception) {
+            } catch (runtime_error exception) {
+                client.log(string("recving fault: ") + exception.what());
                 client.shutdown(SHUT_RDWR);
                 client.close();
-                _clients.remove(client);
+                // _clients.remove(client);
             }
         }
     }
