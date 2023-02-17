@@ -18,6 +18,8 @@ public:
     TcpSocket();
     TcpSocket(const int fd, const string ip, const int port);
     ~TcpSocket();
+    void shutdown(const int method);
+    void close();
     void unblock();
     void reuse();
     void bind(const string ip, const int port);
@@ -31,8 +33,11 @@ public:
     bool equal(const TcpSocket& to) const;
     void run(const int timeoutSeconds, TcpSessionHandler handler);
     void terminate();
+    void setup(ostream * errorLog);
+    void log(const string message);
 protected:
     int _socket;
+    ostream * _errorLog;
     string _ip;
     int _port;
     list<TcpSocket> _clients;

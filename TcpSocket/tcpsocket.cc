@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include "tcpsocket.h"
 TcpSocket::TcpSocket() {
-    cerr << "socket()" << endl;
+    _errorLog = &cerr;
     _port = 0;
     _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (-1 != _socket) return;
@@ -36,23 +36,48 @@ TcpSocket::TcpSocket() {
     }
 }
 TcpSocket::TcpSocket(const int fd, const string ip, const int port) {
-    cerr << "socket::copy()" << endl;
+    _errorLog = &cerr;
     if (fd < 1) throw runtime_error("invalid socket fd");
     _ip = ip;
     _port = port;
 }
-TcpSocket::~TcpSocket() {
-    cerr << "close()" << endl;
-    if (-1 == _socket) return;
-    shutdown(_socket, SHUT_RDWR);
-    close(_socket);
+void TcpSocket::setup(ostream *errorLog) {
+    _errorLog = errorLog ? errorLog : &cerr;
 }
+void TcpSocket::log(const string message) {
+    *_errorLog << endl << "#" << _socket << ":\t" << message << endl;
+}
+void TcpSocket::shutdown(const int method) {
+    log("shutdown()");
+    int result = ::shutdown(_socket, method);
+    if (-1 != result) return;
+    switch (errno) {
+        case EBADF: throw runtime_error("The socket argument is not a valid file descriptor.");
+        case EINVAL: throw runtime_error("The how argument is invalid.");
+        case ENOTCONN: throw runtime_error("The socket is not connected.");
+        case ENOTSOCK: throw runtime_error("The socket argument does not refer to a socket.");
+        case ENOBUFS: throw runtime_error("Insufficient resources were available in the system to perform the operation.");
+        default: throw runtime_error("Unknown error when shutdown(): " + to_string(errno));
+    }
+}
+void TcpSocket::close() {
+    log("close()");
+    int result = ::close(_socket);
+    if (-1 != result) return;
+    switch (errno) {
+        case EBADF: throw runtime_error("The fildes argument is not a valid file descriptor.");
+        case EINTR: throw runtime_error("The close() function was interrupted by a signal.");
+        case EIO: throw runtime_error("An I/O error occurred while reading from or writing to the file system.");
+        default: throw runtime_error("Unknown error when close(): " + to_string(errno));
+    }
+}
+TcpSocket::~TcpSocket() { }
 void TcpSocket::unblock() {
 #ifdef __APPLE__
-    cerr << "fcntl()" << endl;
+    log("fcntl()");
     int result = ::fcntl(_socket, O_NONBLOCK);
 #else
-    cerr << "ioctl()" << endl;
+    log("ioctl()");
     int result = ::ioctl(_socket, FIONBIO);
 #endif
     if (-1 != result) return;
@@ -65,7 +90,7 @@ void TcpSocket::unblock() {
     }
 }
 void TcpSocket::reuse() {
-    cerr << "setsockopt()" << endl;
+    log("setsockopt()");
     int option = 1;
     int result = ::setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(int));
     if (-1 != result) return;
@@ -79,7 +104,7 @@ void TcpSocket::reuse() {
     }
 }
 void TcpSocket::bind(const string ip, const int port) {
-    cerr << "bind()" << endl;
+    log("bind()");
     _ip = ip;
     _port = port;
     struct sockaddr_in host;
@@ -108,7 +133,7 @@ void TcpSocket::bind(const string ip, const int port) {
     }
 }
 void TcpSocket::listen() {
-    cerr << "listen()" << endl;
+    log("listen()");
     int result = ::listen(_socket, SOMAXCONN);
     if (-1 != result) return;
     switch (errno) {
@@ -120,7 +145,7 @@ void TcpSocket::listen() {
     }
 }
 TcpSocket TcpSocket::accept() {
-    cerr << "accept()" << endl;
+    log("accept()");
     struct sockaddr_in address;
     socklen_t size = sizeof(address);
     int fd = ::accept(_socket, (struct sockaddr *)&address, &size);
@@ -146,7 +171,7 @@ TcpSocket TcpSocket::accept() {
     }
 }
 void TcpSocket::send(const void * data, const size_t size) {
-    cerr << "send()" << endl;
+    log("send()");
     if (!data || size < 1) throw runtime_error("invalid data buffer");
     ssize_t result = ::send(_socket, data, size, 0);
     if (-1 != result) return;
@@ -178,6 +203,7 @@ void TcpSocket::send(const string content) {
     send(content.c_str(), content.size());
 }
 size_t TcpSocket::recv(bool peek) {
+    log("recv()");
     unsigned char * buffer = (unsigned char *)malloc(szBUF);
     memset(buffer, 0, szBUF);
     size_t size = ::recv(_socket, buffer, szBUF, peek ? MSG_PEEK : 0);
@@ -187,7 +213,6 @@ size_t TcpSocket::recv(bool peek) {
         }
     }
     free(buffer);
-    if (size == 0) ::shutdown(_socket, SHUT_RD);
     if (size >= 0) return size;
     switch (errno) {
         case EAGAIN: throw runtime_error("The socket is marked nonblocking and the receive operation would block, or a receive timeout had been set and the timeout expired before data was received.  POSIX.1 allows either error to be returned for this case, and does not require these constants to have the same value, so a portable application should check for both possibilities.");
@@ -237,26 +262,30 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
         throw runtime_error("server socket failure");
     }
     if (FD_ISSET(_socket, &readfds)) {
-        try {
-            auto client = accept();
-            _clients.push_back(client);
-        } catch (runtime_error exception) {
-            cerr << "accept() failed: " << exception.what() << endl;
-        }
+        auto client = accept();
+        client.setup(_errorLog);
+        _clients.push_back(client);
     }
     for(auto client: _clients) {
         int sck = client._socket;
         if (FD_ISSET(sck, &errorfds)) {
+            client.shutdown(SHUT_RDWR);
+            client.close();
             _clients.remove(client);
         } else if (FD_ISSET(sck, &readfds)) {
             try {
                 size_t result = client.recv(false);
                 if (0 == result) {
+                    client.shutdown(SHUT_RD);
                     auto response = handler(client._buffer);
                     client.send(response);
+                    client.shutdown(SHUT_WR);
+                    client.close();
                     _clients.remove(client);
                 }
             } catch(runtime_error exception) {
+                client.shutdown(SHUT_RDWR);
+                client.close();
                 _clients.remove(client);
             }
         }
@@ -265,7 +294,12 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
 void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
     _live = true;
     while(_live) {
-        select(timeoutSeconds, handler);
+        try {
+            select(timeoutSeconds, handler);
+        } catch(runtime_error exception) {
+            log(string("run(): ") + exception.what());
+            _live = false;
+        }
     }
 }
 void TcpSocket::terminate() {

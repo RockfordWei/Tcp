@@ -15,6 +15,7 @@ vector<unsigned char> echoResponse(const vector <unsigned char> request) {
 int main(int argc, const char * argv[]) {
     try {
         auto server = TcpSocket();
+        server.setup(&cerr);
         server.unblock();
         server.reuse();
         server.bind("127.0.0.1", 8080);
