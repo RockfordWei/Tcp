@@ -21,6 +21,7 @@
 TcpSocket::TcpSocket() {
     _errorLog = &cerr;
     _port = 0;
+    _live = true;
     _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (-1 != _socket) return;
     switch (errno) {
@@ -41,6 +42,7 @@ TcpSocket::TcpSocket(const int fd, const string ip, const int port) {
     _socket = fd;
     _ip = ip;
     _port = port;
+    _live = true;
 }
 void TcpSocket::setup(ostream *errorLog) {
     _errorLog = errorLog ? errorLog : &cerr;
@@ -129,14 +131,14 @@ void TcpSocket::listen() {
         default: throw runtime_error("Unknown error when listen(): " + to_string(errno));
     }
 }
-TcpSocket TcpSocket::accept() {
+TcpSocket * TcpSocket::accept() {
     log("accept()");
     struct sockaddr_in address;
     socklen_t size = sizeof(address);
     int fd = ::accept(_socket, (struct sockaddr *)&address, &size);
     if (fd > 0) {
         log(string("incoming: " + to_string(fd)));
-        return TcpSocket(fd, inet_ntoa(address.sin_addr), htons(address.sin_port));
+        return new TcpSocket(fd, inet_ntoa(address.sin_addr), htons(address.sin_port));
     }
     switch (errno) {
         case EAGAIN: throw runtime_error("The socket is marked nonblocking and no connections are present to be accepted.  POSIX.1-2001 and POSIX.1-2008 allow either error to be returned for this case, and do not require these constants to have the same value, so a portable application should check for both possibilities.");
@@ -214,19 +216,16 @@ size_t TcpSocket::recv(bool peek) {
     }
 }
 void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
-    log("preparing");
     fd_set readfds, errorfds;
     FD_ZERO(&readfds);
     FD_ZERO(&errorfds);
-    log("setup server fd");
     FD_SET(_socket, &readfds);
     FD_SET(_socket, &errorfds);
     auto largest = _socket;
-    log("checking clients");
     for(auto client: _clients) {
-        auto sck = client._socket;
+        if (!client->_live) continue;
+        auto sck = client->_socket;
         if (sck > largest) largest = sck;
-        client.log("setup client");
         FD_SET(sck, &readfds);
         FD_SET(sck, &errorfds);
     }
@@ -237,51 +236,58 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
     struct timeval timeout;
     timeout.tv_sec = timeoutSeconds;
     timeout.tv_usec = 0;
-    string message;
-    log("select()");
     int result = ::select(largest, &readfds, NULL, &errorfds, &timeout);
     if (result == 0) return;
     if (-1 == result) {
         switch (errno) {
-            case EBADF: message = "An invalid file descriptor was given in one of the sets. (Perhaps a file descriptor that was already closed, or one on which an error has occurred.)  However, see BUGS.";
-            case EINVAL: message = "nfds is negative or exceeds the RLIMIT_NOFILE resource limit (see getrlimit(2)).";
-            case ENOMEM: message = "Unable to allocate memory for internal tables.";
-            case EINTR: message = "A signal was caught; see signal(7)";
-            default: message = "Unknown error when select(): " + to_string(errno);
+            case EBADF: throw runtime_error("An invalid file descriptor was given in one of the sets. (Perhaps a file descriptor that was already closed, or one on which an error has occurred.)  However, see BUGS.");
+            case EINVAL: throw runtime_error("nfds is negative or exceeds the RLIMIT_NOFILE resource limit (see getrlimit(2)).");
+            case ENOMEM: throw runtime_error("Unable to allocate memory for internal tables.");
+            case EINTR: throw runtime_error("A signal was caught; see signal(7)");
+            default: throw runtime_error("Unknown error when select(): " + to_string(errno));
         }
-        log(message);
     }
     if (FD_ISSET(_socket, &errorfds)) {
         throw runtime_error("server socket failure");
     }
     if (FD_ISSET(_socket, &readfds)) {
         auto client = accept();
-        client.setup(_errorLog);
-        _clients.push_back(client);
+        if (client) {
+            client->setup(_errorLog);
+            _clients.insert(client);
+        }
     }
     for(auto client: _clients) {
-        auto sck = client._socket;
-        client.log("checking");
+        if (!client->_live) continue;
+        auto sck = client->_socket;
         if (FD_ISSET(sck, &errorfds)) {
-            client.log("error raised, closing");
-            client.shutdown(SHUT_RDWR);
-            client.close();
-            // _clients.remove(client);
+            client->_live = false;
         } else if (FD_ISSET(sck, &readfds)) {
-            client.log("reading");
             try {
-                size_t result = client.recv(false);
-                if (result >= 0) {
-                    auto response = handler(client._buffer);
-                    client.send(response);
+                size_t result = client->recv(false);
+                if (result > 0) {
+                    auto response = handler(client->_buffer);
+                    client->send(response);
+                } else {
+                    client->_live = false;
                 }
             } catch (runtime_error exception) {
-                client.log(string("recving fault: ") + exception.what());
-                client.shutdown(SHUT_RDWR);
-                client.close();
-                // _clients.remove(client);
+                client->_live = false;
             }
         }
+    }
+}
+void TcpSocket::clean() {
+    set<TcpSocket *> trash;
+    for(auto client: _clients) {
+        if (client->_live) continue;
+        trash.insert(client);
+    }
+    for(auto client: trash) {
+        _clients.erase(client);
+    }
+    for(auto client: trash) {
+        delete client;
     }
 }
 void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
@@ -289,6 +295,7 @@ void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
     while(_live) {
         try {
             select(timeoutSeconds, handler);
+            clean();
         } catch(runtime_error exception) {
             log(string("run(): ") + exception.what());
             _live = false;

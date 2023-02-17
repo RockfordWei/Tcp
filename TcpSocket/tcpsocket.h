@@ -8,7 +8,7 @@
 #ifndef tcpsocket_h
 #define tcpsocket_h
 #include <iostream>
-#include <list>
+#include <set>
 #include <string>
 #include <vector>
 using namespace std;
@@ -24,7 +24,7 @@ public:
     void reuse();
     void bind(const string ip, const int port);
     void listen();
-    TcpSocket accept();
+    TcpSocket * accept();
     void send(const void * data, const size_t size);
     void send(const vector<unsigned char> data);
     void send(const string content);
@@ -35,12 +35,13 @@ public:
     void terminate();
     void setup(ostream * errorLog);
     void log(const string message);
+    void clean();
 protected:
     int _socket;
     ostream * _errorLog;
     string _ip;
     int _port;
-    list<TcpSocket> _clients;
+    set<TcpSocket *> _clients;
     vector<unsigned char> _buffer;
     bool _live;
 };
