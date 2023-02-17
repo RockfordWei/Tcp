@@ -1,2 +1,2 @@
 #/bin/bash
-docker run -t -v $PWD:/home -w /home swift:5.7 /bin/bash -c ./test.sh
+docker run -it -v $PWD:/home -p 8080:8080 -w /home swift:5.7 /bin/bash -c ./test.sh
