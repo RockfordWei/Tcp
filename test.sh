@@ -1,2 +1,2 @@
 #/bin/bash
-clang++ -o /tmp/tcptest TcpSocket/*.cc && /tmp/tcptest
+clang++ -std=c++11 -o /tmp/tcptest TcpSocket/*.cc && /tmp/tcptest

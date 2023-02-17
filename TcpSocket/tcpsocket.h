@@ -12,10 +12,7 @@
 #include <string>
 #include <vector>
 using namespace std;
-class TcpServerSocketDelegate {
-public:
-    virtual vector<unsigned char> * respond(const vector <unsigned char> request);
-};
+typedef vector<unsigned char> (*TcpSessionHandler)(const vector<unsigned char>);
 class TcpSocket {
 public:
     TcpSocket();
@@ -30,16 +27,17 @@ public:
     void send(const vector<unsigned char> data);
     void send(const string content);
     size_t recv(bool peek);
-    void setDelegate(const TcpServerSocketDelegate * delegate);
-    void select(const int timeoutSeconds);
+    void select(const int timeoutSeconds, TcpSessionHandler handler);
     bool equal(const TcpSocket& to) const;
+    void run(const int timeoutSeconds, TcpSessionHandler handler);
+    void terminate();
 protected:
     int _socket;
     string _ip;
     int _port;
     list<TcpSocket> _clients;
     vector<unsigned char> _buffer;
-    TcpServerSocketDelegate * _delegate;
+    bool _live;
 };
 bool operator == (const TcpSocket& me, const TcpSocket& other);
 #endif /* tcpsocket_h */
