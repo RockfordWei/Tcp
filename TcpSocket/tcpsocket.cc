@@ -266,7 +266,7 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
             try {
                 size_t result = client->recv(false);
                 if (result > 0) {
-                    auto response = handler(client->_buffer);
+                    auto response = handler(client->_socket, client->_buffer);
                     client->send(response);
                 } else {
                     client->_live = false;

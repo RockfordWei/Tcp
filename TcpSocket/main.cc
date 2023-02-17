@@ -9,7 +9,7 @@
 #include "tcpsocket.h"
 using namespace std;
 
-vector<unsigned char> echoResponse(const vector <unsigned char> request) {
+vector<unsigned char> echoResponse(const int identifier, const vector <unsigned char> request) {
     return request;
 }
 int main(int argc, const char * argv[]) {

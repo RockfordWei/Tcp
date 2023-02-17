@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 using namespace std;
-typedef vector<unsigned char> (*TcpSessionHandler)(const vector<unsigned char>);
+typedef vector<unsigned char> (*TcpSessionHandler)(const int, const vector<unsigned char>);
 class TcpSocket {
 public:
     TcpSocket();
