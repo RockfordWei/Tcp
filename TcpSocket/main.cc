@@ -6,11 +6,19 @@
 //
 
 #include <iostream>
+#include <string.h>
 #include "tcpsocket.h"
 using namespace std;
 
-vector<unsigned char> echoResponse(const int identifier, const vector <unsigned char> request) {
-    return request;
+void echoSession(const void * tcpSocket) {
+    if (!tcpSocket) return;
+    auto client = (TcpSocket *)tcpSocket;
+    size_t size = 0;
+    auto request = client->request(&size);
+    client->send(request, size);
+    if (size > 0) {
+        if (strstr((char*)request, "close")) client->terminate(); 
+    }
 }
 int main(int argc, const char * argv[]) {
     try {
@@ -21,7 +29,7 @@ int main(int argc, const char * argv[]) {
         server.bind("0.0.0.0", 8080);
         server.listen();
         cout << "ready" << endl;
-        server.run(1, &echoResponse);
+        server.run(1, &echoSession);
     } catch (runtime_error exception) {
         cerr << exception.what() << endl;
     }
