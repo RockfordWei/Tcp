@@ -7,14 +7,29 @@
 
 #ifndef tcpsocket_h
 #define tcpsocket_h
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <signal.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/fcntl.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <future>
 #include <iostream>
+#include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 using namespace std;
-typedef void (*TcpClientSessionHandler)(const void *);
 class TcpSocket {
 public:
+    typedef void (*TcpClientSessionHandler)(TcpSocket *);
     TcpSocket();
     TcpSocket(const int fd, const string ip, const int port);
     ~TcpSocket();
@@ -45,6 +60,7 @@ protected:
     set<TcpSocket *> _clients;
     vector<unsigned char> _buffer;
     bool _live;
+    mutex * _shared;
 };
 bool operator == (const TcpSocket& me, const TcpSocket& other);
 #endif /* tcpsocket_h */

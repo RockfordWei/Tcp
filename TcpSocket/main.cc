@@ -5,20 +5,25 @@
 //  Created by Rocky Wei on 2/15/23.
 //
 
-#include <iostream>
-#include <string.h>
 #include "tcpsocket.h"
 using namespace std;
 
-void echoSession(const void * tcpSocket) {
-    if (!tcpSocket) return;
-    auto client = (TcpSocket *)tcpSocket;
-    size_t size = 0;
-    auto request = client->request(&size);
-    client->send(request, size);
-    if (size > 0) {
-        if (strstr((char*)request, "close")) client->terminate(); 
+class ClientSocket: TcpSocket {
+public:
+    void echo();
+};
+void ClientSocket::echo() {
+    lock_guard<mutex> guard(*_shared);
+    auto request = _buffer.data();
+    if (!request) return;
+    send(request, _buffer.size());
+    if (strstr((char*)request, "close")) {
+        terminate();
     }
+}
+void echoSession(TcpSocket * tcpSocket) {
+    auto client = (ClientSocket *)tcpSocket;
+    client->echo();
 }
 int main(int argc, const char * argv[]) {
     try {
