@@ -215,7 +215,11 @@ size_t TcpSocket::recv(bool peek) {
         default: throw runtime_error("Unknown error when recv(): " + to_string(errno));
     }
 }
-void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
+void * TcpSocket::request(size_t * size) {
+    *size = _buffer.size();
+    return _buffer.data();
+}
+void TcpSocket::select(const int timeoutSeconds, TcpClientSessionHandler handler) {
     fd_set readfds, errorfds;
     FD_ZERO(&readfds);
     FD_ZERO(&errorfds);
@@ -265,9 +269,8 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
         } else if (FD_ISSET(sck, &readfds)) {
             try {
                 size_t result = client->recv(false);
-                if (result > 0) {
-                    auto response = handler(client->_socket, client->_buffer);
-                    client->send(response);
+              if (result > 0) {
+                    handler(client);
                 } else {
                     client->_live = false;
                 }
@@ -287,10 +290,12 @@ void TcpSocket::clean() {
         _clients.erase(client);
     }
     for(auto client: trash) {
+        client->shutdown(SHUT_RDWR);
+        client->close();
         delete client;
     }
 }
-void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
+void TcpSocket::run(const int timeoutSeconds, TcpClientSessionHandler handler) {
     _live = true;
     while(_live) {
         try {
