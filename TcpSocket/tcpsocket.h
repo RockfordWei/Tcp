@@ -44,7 +44,6 @@ public:
     void send(const vector<unsigned char> data);
     void send(const string content);
     size_t recv(bool peek);
-    void * request(size_t * size);
     void select(const int timeoutSeconds, TcpClientSessionHandler handler);
     bool equal(const TcpSocket& to) const;
     void run(const int timeoutSeconds, TcpClientSessionHandler handler);
