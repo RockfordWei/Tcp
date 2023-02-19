@@ -5,23 +5,12 @@
 //  Created by Rocky Wei on 2/15/23.
 //
 #define szBUF 4096
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/fcntl.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include "tcpsocket.h"
 TcpSocket::TcpSocket() {
     _errorLog = &cerr;
     _port = 0;
     _live = true;
+    _shared = new mutex();
     _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (-1 != _socket) return;
     switch (errno) {
@@ -43,6 +32,7 @@ TcpSocket::TcpSocket(const int fd, const string ip, const int port) {
     _ip = ip;
     _port = port;
     _live = true;
+    _shared = new mutex();
 }
 void TcpSocket::setup(ostream *errorLog) {
     _errorLog = errorLog ? errorLog : &cerr;
@@ -58,7 +48,9 @@ void TcpSocket::close() {
     log("close()");
     ::close(_socket);
 }
-TcpSocket::~TcpSocket() { }
+TcpSocket::~TcpSocket() {
+    delete _shared;
+}
 void TcpSocket::unblock() {
 #ifdef __APPLE__
     log("fcntl()");
@@ -215,7 +207,7 @@ size_t TcpSocket::recv(bool peek) {
         default: throw runtime_error("Unknown error when recv(): " + to_string(errno));
     }
 }
-void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
+void TcpSocket::select(const int timeoutSeconds, TcpClientSessionHandler handler) {
     fd_set readfds, errorfds;
     FD_ZERO(&readfds);
     FD_ZERO(&errorfds);
@@ -261,18 +253,24 @@ void TcpSocket::select(const int timeoutSeconds, TcpSessionHandler handler) {
         if (!client->_live) continue;
         auto sck = client->_socket;
         if (FD_ISSET(sck, &errorfds)) {
-            client->_live = false;
+            client->terminate();
         } else if (FD_ISSET(sck, &readfds)) {
+            size_t result = 0;
             try {
-                size_t result = client->recv(false);
-                if (result > 0) {
-                    auto response = handler(client->_socket, client->_buffer);
-                    client->send(response);
-                } else {
-                    client->_live = false;
-                }
+                lock_guard<mutex> guard(*client->_shared);
+                result = client->recv(false);
             } catch (runtime_error exception) {
-                client->_live = false;
+                log(exception.what());
+            }
+            if (result) {
+                try {
+                    async(handler, client);
+                } catch (runtime_error exception) {
+                    log(exception.what());
+                    client->terminate();
+                }
+            } else {
+                client->terminate();
             }
         }
     }
@@ -286,11 +284,8 @@ void TcpSocket::clean() {
     for(auto client: trash) {
         _clients.erase(client);
     }
-    for(auto client: trash) {
-        delete client;
-    }
 }
-void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
+void TcpSocket::run(const int timeoutSeconds, TcpClientSessionHandler handler) {
     _live = true;
     while(_live) {
         try {
@@ -304,6 +299,8 @@ void TcpSocket::run(const int timeoutSeconds, TcpSessionHandler handler) {
 }
 void TcpSocket::terminate() {
     _live = false;
+    shutdown(SHUT_RDWR);
+    close();
 }
 bool TcpSocket::equal(const TcpSocket& to) const {
     return _socket == to._socket;
