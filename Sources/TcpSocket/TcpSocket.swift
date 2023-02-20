@@ -19,6 +19,7 @@ open class TcpSocket {
     }
     internal var _ip: String = "0.0.0.0"
     internal var _port: UInt16 = 0
+    public var timeoutMilliseconds: Int32 = 100
     public var ip: String {
         return _ip
     }

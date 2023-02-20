@@ -64,7 +64,7 @@ public extension TcpSocket {
     var pollFd: pollfd {
         return pollfd(fd: _socket, events: Int16(POLLIN), revents: 0)
     }
-    func poll(queue: DispatchQueue? = nil, timeoutMilliseconds: Int32 = 1000) throws {
+    func poll(queue: DispatchQueue? = nil) throws {
         clients = clients.filter { $0.live }
         let sockets = [self] + clients.map { $0 }
         var fds = sockets.map { $0.pollFd }
@@ -105,21 +105,18 @@ public extension TcpSocket {
             }
         }
     }
-    func asyncPoll(queue: DispatchQueue = .global(qos: .background), timeoutMilliseconds: Int32 = 1000) {
+    func serve(queue: DispatchQueue = .global(qos: .background)) {
         guard live else { return }
-        do {
-            try poll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
-            queue.async {
-                self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
-            }
-        } catch {
-            NSLog("unable to poll: \(error)")
-            live = false
-        }
-    }
-    func serve(queue: DispatchQueue = DispatchQueue.global(qos: .background), timeoutMilliseconds: Int32 = 1000) {
         queue.async {
-            self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
+            do {
+                try self.poll(queue: queue)
+                queue.async {
+                    self.serve(queue: queue)
+                }
+            } catch {
+                NSLog("unable to poll: \(error)")
+                self.live = false
+            }
         }
     }
 }
