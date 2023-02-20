@@ -64,7 +64,7 @@ public extension TcpSocket {
     var pollFd: pollfd {
         return pollfd(fd: _socket, events: Int16(POLLIN), revents: 0)
     }
-    func poll(timeoutMilliseconds: Int32 = 1000) throws {
+    func poll(queue: DispatchQueue? = nil, timeoutMilliseconds: Int32 = 1000) throws {
         clients = clients.filter { $0.live }
         let sockets = [self] + clients.map { $0 }
         var fds = sockets.map { $0.pollFd }
@@ -96,13 +96,19 @@ public extension TcpSocket {
         }
         guard let delegate = delegate else { return }
         for client in group {
-            delegate.onDataArrival(tcpSocket: client)
+            if let queue = queue {
+                queue.async {
+                    delegate.onDataArrival(tcpSocket: client)
+                }
+            } else {
+                delegate.onDataArrival(tcpSocket: client)
+            }
         }
     }
     func asyncPoll(queue: DispatchQueue = .global(qos: .background), timeoutMilliseconds: Int32 = 1000) {
         guard live else { return }
         do {
-            try poll(timeoutMilliseconds: timeoutMilliseconds)
+            try poll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
             queue.async {
                 self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
             }
@@ -113,11 +119,13 @@ public extension TcpSocket {
     }
     func serve(queue: DispatchQueue? = nil, timeoutMilliseconds: Int32 = 1000) {
         if let queue = queue {
-            asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
+            queue.async {
+                self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
+            }
         } else {
             while live {
                 do {
-                    try poll(timeoutMilliseconds: timeoutMilliseconds)
+                    try poll(queue: nil, timeoutMilliseconds: timeoutMilliseconds)
                 } catch {
                     NSLog("unable to poll: \(error)")
                     live = false
