@@ -65,6 +65,7 @@ public extension TcpSocket {
         return pollfd(fd: _socket, events: Int16(POLLIN), revents: 0)
     }
     func poll(timeoutMilliseconds: Int32 = 1000) throws {
+        clients = clients.filter { $0.live }
         let sockets = [self] + clients.map { $0 }
         var fds = sockets.map { $0.pollFd }
         let nfds = nfds_t(fds.count)
@@ -98,14 +99,10 @@ public extension TcpSocket {
             delegate.onDataArrival(tcpSocket: client)
         }
     }
-    func clean() {
-        clients = clients.filter { $0.live }
-    }
     func asyncPoll(queue: DispatchQueue = .global(qos: .background), timeoutMilliseconds: Int32 = 1000) {
         guard live else { return }
         do {
             try poll(timeoutMilliseconds: timeoutMilliseconds)
-            clean()
             queue.async {
                 self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
             }
