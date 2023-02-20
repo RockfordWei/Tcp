@@ -10,8 +10,7 @@ final class TcpSocketTests: XCTestCase {
         try server.bind(port: port)
         try server.listen()
         server.delegate = echo
-        let queue = DispatchQueue.global(qos: .background)
-        server.serve(queue: queue)
+        server.serve()
         let client = try TcpSocket()
         try client.connect(to: "0.0.0.0", with: port)
         try client.send(text: "hello")

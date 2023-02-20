@@ -28,12 +28,12 @@ open class TcpSocket {
     public var live = true
     public var delegate: TcpSocketDelegate?
     internal var clients: Set<TcpSocket> = []
-    init(originalSocket: Int32, ipAddress: String, port: UInt16) {
+    public init(originalSocket: Int32, ipAddress: String, port: UInt16) {
         _socket = originalSocket
         _ip = ipAddress
         _port = port
     }
-    convenience init(originalSocket: Int32, address: sockaddr) {
+    public convenience init(originalSocket: Int32, address: sockaddr) {
         var addr = address
         let (ipAddress, port): (String, UInt16) = withUnsafePointer(to: &addr) { baseAddress -> (String, UInt16) in
             let placeholder = sockaddr_in()
@@ -46,7 +46,7 @@ open class TcpSocket {
         }
         self.init(originalSocket: originalSocket, ipAddress: ipAddress, port: port)
     }
-    init() throws {
+    public init() throws {
         #if os(Linux)
         _socket = socket(AF_INET, 1, Int32(IPPROTO_TCP))
         #else
@@ -71,7 +71,7 @@ open class TcpSocket {
         }
         throw Exception.fail(reason: reason)
     }
-    func shutdown(method: ShutdownMethod = .both) {
+    public func shutdown(method: ShutdownMethod = .both) {
         let value: Int32
         switch method {
         case .read: value = Int32(SHUT_RD)
@@ -84,7 +84,7 @@ open class TcpSocket {
         Darwin.shutdown(_socket, value)
         #endif
     }
-    func close() {
+    public func close() {
         #if os(Linux)
         Glibc.close(_socket)
         #else

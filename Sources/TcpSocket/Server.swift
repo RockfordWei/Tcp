@@ -117,20 +117,9 @@ public extension TcpSocket {
             live = false
         }
     }
-    func serve(queue: DispatchQueue? = nil, timeoutMilliseconds: Int32 = 1000) {
-        if let queue = queue {
-            queue.async {
-                self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
-            }
-        } else {
-            while live {
-                do {
-                    try poll(queue: nil, timeoutMilliseconds: timeoutMilliseconds)
-                } catch {
-                    NSLog("unable to poll: \(error)")
-                    live = false
-                }
-            }
+    func serve(queue: DispatchQueue = DispatchQueue.global(qos: .background), timeoutMilliseconds: Int32 = 1000) {
+        queue.async {
+            self.asyncPoll(queue: queue, timeoutMilliseconds: timeoutMilliseconds)
         }
     }
 }
