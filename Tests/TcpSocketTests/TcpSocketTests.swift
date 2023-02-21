@@ -7,7 +7,7 @@ final class TcpSocketTests: XCTestCase {
     let port: UInt16 = 8181
     override func setUp() {
         do {
-            let echo = EchoServer(exp: exp)
+            let echo = HttpTestServer(exp: exp)
             server = try TcpSocket()
             try server.bind(port: port)
             try server.listen()
@@ -36,13 +36,17 @@ final class TcpSocketTests: XCTestCase {
         let expUrl = expectation(description: "url")
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let data = data {
-                NSLog("\(data)")
+                if let text = String(data: data, encoding: .utf8) {
+                    NSLog("response text: \(text)")
+                } else {
+                    NSLog("response data: \(data)")
+                }
             }
             if let error = error {
-                NSLog("\(error)")
+                NSLog("response error: \(error)")
             }
             if let response = response {
-                NSLog("\(response)")
+                NSLog("response: \(response)")
             }
             expUrl.fulfill()
         }.resume()
@@ -54,7 +58,7 @@ final class TcpSocketTests: XCTestCase {
     ]
 }
 
-class EchoServer: TcpSocketDelegate {
+class HttpTestServer: TcpSocketDelegate {
     let exp: XCTestExpectation
     init(exp: XCTestExpectation) {
         self.exp = exp
@@ -65,7 +69,9 @@ class EchoServer: TcpSocketDelegate {
             if let text = String(data: request, encoding: .utf8) {
                 NSLog("\n(recv)\n\(text)\n(end)")
             }
-            try tcpSocket.send(data: request)
+            let response = HttpResponse(content: "{\n\t\"error\": 0\n}")
+            let content = try response.encode()
+            try tcpSocket.send(data: content)
         } catch {
             XCTFail("\(error)")
         }
