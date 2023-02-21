@@ -66,7 +66,7 @@ public extension TcpSocket {
     }
     func poll(queue: DispatchQueue? = nil) throws {
         clients = clients.filter { $0.live }
-        let sockets = [self] + clients.map { $0 }
+        let sockets = [self] + Array(clients)
         var fds = sockets.map { $0.pollFd }
         let nfds = nfds_t(fds.count)
         #if os(Linux)
