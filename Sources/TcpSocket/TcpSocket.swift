@@ -4,7 +4,7 @@ import Glibc
 import Darwin
 #endif
 import Foundation
-public protocol TcpSocketDelegate {
+public protocol TcpSocketDelegate: AnyObject {
     func onDataArrival(tcpSocket: TcpSocket)
 }
 open class TcpSocket {

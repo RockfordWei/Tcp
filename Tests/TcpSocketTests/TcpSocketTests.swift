@@ -2,14 +2,16 @@ import Foundation
 #if os(Linux)
 import FoundationNetworking
 #endif
-import XCTest
 @testable import TcpSocket
+import XCTest
 
+// swiftlint:disable implicitly_unwrapped_optional
 final class TcpSocketTests: XCTestCase {
-    var server: TcpSocket!
+    var server: TcpSocket! = nil
     let exp = XCTestExpectation(description: "echo")
     let port: UInt16 = 8181
     override func setUp() {
+        super.setUp()
         do {
             let echo = HttpTestServer(exp: exp)
             server = try TcpSocket()
@@ -22,6 +24,7 @@ final class TcpSocketTests: XCTestCase {
         }
     }
     override func tearDown() {
+        super.tearDown()
         server.live = false
         server.shutdown()
         server.close()
@@ -38,7 +41,7 @@ final class TcpSocketTests: XCTestCase {
         }
         let request = URLRequest(url: url)
         let expUrl = expectation(description: "url")
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let data = data {
                 if let text = String(data: data, encoding: .utf8) {
                     NSLog("response text: \(text)")
@@ -59,7 +62,8 @@ final class TcpSocketTests: XCTestCase {
             if let response = response {
                 NSLog("response: \(response)")
             }
-        }.resume()
+        }
+        task.resume()
         wait(for: [expUrl], timeout: 5)
     }
     static var allTests = [
