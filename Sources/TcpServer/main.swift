@@ -13,7 +13,7 @@ NSLog("preparing tcp socket on port \(port)")
 let server = try TcpSocket()
 try server.bind(port: port)
 try server.listen()
-server.delegate = EchoServer()
+server.delegate = HttpDemoServer()
 server.serve()
 while server.live {
     guard let text = readLine()?.lowercased() else {
@@ -27,24 +27,24 @@ server.live = false
 server.shutdown()
 server.close()
 
-class EchoServer: TcpSocketDelegate {
+struct DemoResponseBody: Codable {
+    let error: Int
+}
+class HttpDemoServer: TcpSocketDelegate {
     func onDataArrival(tcpSocket: TcpSocket) {
-        var shouldTerminated = false
         do {
             let request = try tcpSocket.recv()
-            try tcpSocket.send(data: request)
-            if let text = String(data: request, encoding: .utf8)?.lowercased(),
-               text.contains("close") || text.contains("quit") || text.contains("exit") {
-                shouldTerminated = true
+            if let text = String(data: request, encoding: .utf8) {
+                NSLog("\n(recv)\n\(text)\n(end)")
             }
+            let response = try HttpResponse(encodable: DemoResponseBody(error: 0))
+            let content = try response.encode()
+            try tcpSocket.send(data: content)
         } catch {
-            NSLog("request failed because \(error)")
-            shouldTerminated = true
+            NSLog("\(error)")
         }
-        if shouldTerminated {
-            tcpSocket.shutdown()
-            tcpSocket.close()
-            tcpSocket.live = false
-        }
+        tcpSocket.shutdown()
+        tcpSocket.close()
+        tcpSocket.live = false
     }
 }

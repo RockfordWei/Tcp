@@ -22,6 +22,10 @@ open class HttpResponse {
     public init(raw: Data) {
         body = raw
     }
+    public convenience init<T: Encodable>(encodable: T) throws {
+        let data = try JSONEncoder().encode(encodable)
+        self.init(raw: data)
+    }
     public func encode() throws -> Data {
         headers["date"] = "\(Date())"
         headers["content-length"] = "\(body.count)"

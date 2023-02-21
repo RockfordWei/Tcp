@@ -1,3 +1,7 @@
+import Foundation
+#if os(Linux)
+import FoundationNetworking
+#endif
 import XCTest
 @testable import TcpSocket
 
@@ -41,6 +45,13 @@ final class TcpSocketTests: XCTestCase {
                 } else {
                     NSLog("response data: \(data)")
                 }
+                do {
+                    let responseBody = try JSONDecoder().decode(ResponseBody.self, from: data)
+                    XCTAssertEqual(responseBody.error, 0)
+                    expUrl.fulfill()
+                } catch {
+                    XCTFail("\(error)")
+                }
             }
             if let error = error {
                 NSLog("response error: \(error)")
@@ -48,7 +59,6 @@ final class TcpSocketTests: XCTestCase {
             if let response = response {
                 NSLog("response: \(response)")
             }
-            expUrl.fulfill()
         }.resume()
         wait(for: [expUrl], timeout: 5)
     }
@@ -57,7 +67,9 @@ final class TcpSocketTests: XCTestCase {
         ("testUrlSession", testUrlSession)
     ]
 }
-
+struct ResponseBody: Codable {
+    let error: Int
+}
 class HttpTestServer: TcpSocketDelegate {
     let exp: XCTestExpectation
     init(exp: XCTestExpectation) {
@@ -69,7 +81,7 @@ class HttpTestServer: TcpSocketDelegate {
             if let text = String(data: request, encoding: .utf8) {
                 NSLog("\n(recv)\n\(text)\n(end)")
             }
-            let response = HttpResponse(content: "{\n\t\"error\": 0\n}")
+            let response = try HttpResponse(encodable: ResponseBody(error: 0))
             let content = try response.encode()
             try tcpSocket.send(data: content)
         } catch {
