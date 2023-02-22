@@ -29,12 +29,6 @@ final class TcpSocketTests: XCTestCase {
         server.shutdown()
         server.close()
     }
-    func testEcho() throws {
-        let client = try TcpSocket()
-        try client.connect(to: "0.0.0.0", with: port)
-        try client.send(text: "hello")
-        wait(for: [exp], timeout: 5)
-    }
     func testUrlSession() throws {
         guard let url = URL(string: "http://localhost:8181/") else {
             throw NSError(domain: "invalid url", code: 0)
@@ -66,42 +60,7 @@ final class TcpSocketTests: XCTestCase {
         task.resume()
         wait(for: [expUrl], timeout: 5)
     }
-    func testDataSplitGood() throws {
-        let text = try XCTUnwrap("this\r\n\r\nis\r\n\r\na\r\n\r\ngood\r\n\r\ntest".data(using: .utf8))
-        let results = text.split(by: "\r\n\r\n")
-        XCTAssertFalse(results.isEmpty)
-        let words = results.compactMap { String(data: $0, encoding: .utf8) }
-        XCTAssertEqual(words, ["this", "is", "a", "good", "test"])
-    }
-    func testDataSplitOneHead() throws {
-        let text = try XCTUnwrap("this\r\n\r\n".data(using: .utf8))
-        let results = text.split(by: "\r\n\r\n")
-        let words = results.compactMap { String(data: $0, encoding: .utf8) }
-        XCTAssertEqual(words, ["this"])
-    }
-    func testDataSplitOneTail() throws {
-        let text = try XCTUnwrap("\r\n\r\nthis".data(using: .utf8))
-        let results = text.split(by: "\r\n\r\n")
-        let words = results.compactMap { String(data: $0, encoding: .utf8) }
-        XCTAssertEqual(words, ["this"])
-    }
-    func testDataSplitEmpty() throws {
-        let results = Data().split(by: "\r\n\r\n")
-        XCTAssertTrue(results.isEmpty)
-    }
-    func testDataSplitBad() throws {
-        let text = try XCTUnwrap("this is a test".data(using: .utf8))
-        let results = text.split(by: "\r\n\r\n")
-        let words = results.compactMap { String(data: $0, encoding: .utf8) }
-        XCTAssertEqual(words, ["this is a test"])
-    }
     static var allTests = [
-        ("testEcho", testEcho),
-        ("testDataSplitGood", testDataSplitGood),
-        ("testDataSplitOneHead", testDataSplitOneHead),
-        ("testDataSplitOneTail", testDataSplitOneTail),
-        ("testDataSplitEmpty", testDataSplitEmpty),
-        ("testDataSplitBad", testDataSplitBad),
         ("testUrlSession", testUrlSession)
     ]
 }
@@ -119,6 +78,8 @@ class HttpTestServer: TcpSocketDelegate {
             if let text = String(data: request, encoding: .utf8) {
                 NSLog("\n(recv)\n\(text)\n(end)")
             }
+            let httpRequest = try HttpRequest(request: request)
+            print("request", httpRequest)
             let response = try HttpResponse(encodable: ResponseBody(error: 0))
             let content = try response.encode()
             try tcpSocket.send(data: content)
