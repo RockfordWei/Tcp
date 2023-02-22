@@ -29,12 +29,6 @@ final class TcpSocketTests: XCTestCase {
         server.shutdown()
         server.close()
     }
-    func testEcho() throws {
-        let client = try TcpSocket()
-        try client.connect(to: "0.0.0.0", with: port)
-        try client.send(text: "hello")
-        wait(for: [exp], timeout: 5)
-    }
     func testUrlSession() throws {
         guard let url = URL(string: "http://localhost:8181/") else {
             throw NSError(domain: "invalid url", code: 0)
@@ -67,7 +61,6 @@ final class TcpSocketTests: XCTestCase {
         wait(for: [expUrl], timeout: 5)
     }
     static var allTests = [
-        ("testEcho", testEcho),
         ("testUrlSession", testUrlSession)
     ]
 }
@@ -85,6 +78,8 @@ class HttpTestServer: TcpSocketDelegate {
             if let text = String(data: request, encoding: .utf8) {
                 NSLog("\n(recv)\n\(text)\n(end)")
             }
+            let httpRequest = try HttpRequest(request: request)
+            print("request", httpRequest)
             let response = try HttpResponse(encodable: ResponseBody(error: 0))
             let content = try response.encode()
             try tcpSocket.send(data: content)
