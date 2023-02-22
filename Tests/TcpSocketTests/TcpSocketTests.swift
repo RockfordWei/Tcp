@@ -66,8 +66,42 @@ final class TcpSocketTests: XCTestCase {
         task.resume()
         wait(for: [expUrl], timeout: 5)
     }
+    func testDataSplitGood() throws {
+        let text = try XCTUnwrap("this\r\n\r\nis\r\n\r\na\r\n\r\ngood\r\n\r\ntest".data(using: .utf8))
+        let results = text.split(by: "\r\n\r\n")
+        XCTAssertFalse(results.isEmpty)
+        let words = results.compactMap { String(data: $0, encoding: .utf8) }
+        XCTAssertEqual(words, ["this", "is", "a", "good", "test"])
+    }
+    func testDataSplitOneHead() throws {
+        let text = try XCTUnwrap("this\r\n\r\n".data(using: .utf8))
+        let results = text.split(by: "\r\n\r\n")
+        let words = results.compactMap { String(data: $0, encoding: .utf8) }
+        XCTAssertEqual(words, ["this"])
+    }
+    func testDataSplitOneTail() throws {
+        let text = try XCTUnwrap("\r\n\r\nthis".data(using: .utf8))
+        let results = text.split(by: "\r\n\r\n")
+        let words = results.compactMap { String(data: $0, encoding: .utf8) }
+        XCTAssertEqual(words, ["this"])
+    }
+    func testDataSplitEmpty() throws {
+        let results = Data().split(by: "\r\n\r\n")
+        XCTAssertTrue(results.isEmpty)
+    }
+    func testDataSplitBad() throws {
+        let text = try XCTUnwrap("this is a test".data(using: .utf8))
+        let results = text.split(by: "\r\n\r\n")
+        let words = results.compactMap { String(data: $0, encoding: .utf8) }
+        XCTAssertEqual(words, ["this is a test"])
+    }
     static var allTests = [
         ("testEcho", testEcho),
+        ("testDataSplitGood", testDataSplitGood),
+        ("testDataSplitOneHead", testDataSplitOneHead),
+        ("testDataSplitOneTail", testDataSplitOneTail),
+        ("testDataSplitEmpty", testDataSplitEmpty),
+        ("testDataSplitBad", testDataSplitBad),
         ("testUrlSession", testUrlSession)
     ]
 }

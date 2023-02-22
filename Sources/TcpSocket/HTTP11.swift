@@ -34,3 +34,29 @@ open class HttpResponse {
         return payload + body
     }
 }
+
+public extension Data {
+    func split(by separator: String) -> [Data] {
+        guard !isEmpty else {
+            return []
+        }
+        guard let seq = separator.data(using: .utf8) else {
+            return [self]
+        }
+        var remains = self
+        var results = [Data]()
+        while !remains.isEmpty {
+            if let location = remains.firstRange(of: seq) {
+                let head = remains[remains.startIndex..<location.lowerBound]
+                if !head.isEmpty {
+                    results.append(head)
+                }
+                remains = remains[location.upperBound..<remains.endIndex]
+            } else {
+                results.append(remains)
+                break
+            }
+        }
+        return results
+    }
+}
