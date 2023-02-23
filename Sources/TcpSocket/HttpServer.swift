@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol HttpServerDelegate {
+public protocol HttpServerDelegate: AnyObject {
     func onSession(request: HttpRequest) throws -> HttpResponse?
 }
 
