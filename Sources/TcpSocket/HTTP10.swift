@@ -53,11 +53,11 @@ public struct HttpRequest {
         let uriPattern = try NSRegularExpression(pattern: "^(GET|POST|HEAD) (.*) HTTP/([0-9.]+)$", options: .caseInsensitive)
         let headerPattern = try NSRegularExpression(pattern: "^([a-zA-Z\\-]+):\\s(.*)$")
         guard !lines.isEmpty else {
-            throw NSError(domain: "request is blank", code: 400)
+            throw NSError(domain: "Bad Request", code: 400)
         }
         let top = lines.removeFirst()
         guard let uriMatch = uriPattern.firstMatch(in: top, range: NSRange(location: 0, length: top.count)) else {
-            throw NSError(domain: "invalid request uri: \(head)", code: 400)
+            throw NSError(domain: "Bad Request", code: 400)
         }
         let uriRange = uriMatch.range(at: 2)
         let uriString = (head as NSString).substring(with: uriRange)
