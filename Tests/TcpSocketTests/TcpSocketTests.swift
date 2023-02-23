@@ -7,17 +7,13 @@ import XCTest
 
 // swiftlint:disable implicitly_unwrapped_optional
 final class TcpSocketTests: XCTestCase {
-    var server: TcpSocket! = nil
+    var server: HttpServer! = nil
     let port: UInt16 = 8181
     override func setUp() {
         super.setUp()
         do {
-            let echo = HttpTestServer()
-            server = try TcpSocket()
-            try server.bind(port: port)
-            try server.listen()
-            server.delegate = echo
-            server.serve()
+            let web = HttpTestServerDelegate()
+            server = try HttpServer(port: port, delegate: web)
         } catch {
             XCTFail("cannot setup because \(error)")
         }
@@ -64,7 +60,7 @@ final class TcpSocketTests: XCTestCase {
             throw NSError(domain: "invalid url", code: 0)
         }
         let request = URLRequest(url: url)
-        let expUrl = expectation(description: "url")
+        let exp = expectation(description: "url")
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let data = data {
                 if let text = String(data: data, encoding: .utf8) {
@@ -75,7 +71,7 @@ final class TcpSocketTests: XCTestCase {
                 do {
                     let responseBody = try JSONDecoder().decode(ResponseBody.self, from: data)
                     XCTAssertEqual(responseBody.error, 0)
-                    expUrl.fulfill()
+                    exp.fulfill()
                 } catch {
                     XCTFail("\(error)")
                 }
@@ -88,7 +84,7 @@ final class TcpSocketTests: XCTestCase {
             }
         }
         task.resume()
-        wait(for: [expUrl], timeout: 10)
+        wait(for: [exp], timeout: 10)
         #endif
     }
     static var allTests = [
@@ -98,29 +94,12 @@ final class TcpSocketTests: XCTestCase {
 struct ResponseBody: Codable {
     let error: Int
 }
-class HttpTestServer: TcpSocketDelegate {
-    func onDataArrival(tcpSocket: TcpSocket) {
-        do {
-            let request = try tcpSocket.recv()
-            guard !request.isEmpty else {
-                return
-            }
-            if let text = String(data: request, encoding: .utf8) {
-                NSLog("request: \(text)")
-            }
-            let httpRequest = try HttpRequest(request: request)
-            XCTAssertEqual(httpRequest.uri.raw, "/api/v1/get?user=guest&feedback=none")
-            XCTAssertEqual(httpRequest.uri.path, ["api", "v1", "get"])
-            XCTAssertEqual(httpRequest.uri.parameters, ["feedback": "none", "user": "guest"])
-            XCTAssertTrue(httpRequest.body.isEmpty)
-            let response = try HttpResponse(encodable: ResponseBody(error: 0))
-            let content = try response.encode()
-            try tcpSocket.send(data: content)
-        } catch {
-            XCTFail("\(error)")
-        }
-        tcpSocket.shutdown()
-        tcpSocket.close()
-        tcpSocket.live = false
+class HttpTestServerDelegate: HttpServerDelegate {
+    func onSession(request: HttpRequest) throws -> HttpResponse? {
+        XCTAssertEqual(request.uri.raw, "/api/v1/get?user=guest&feedback=none")
+        XCTAssertEqual(request.uri.path, ["api", "v1", "get"])
+        XCTAssertEqual(request.uri.parameters, ["feedback": "none", "user": "guest"])
+        XCTAssertTrue(request.body.isEmpty)
+        return try HttpResponse(encodable: ResponseBody(error: 0))
     }
 }
