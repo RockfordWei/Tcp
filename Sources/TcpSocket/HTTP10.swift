@@ -36,7 +36,7 @@ open class HttpResponse {
 }
 
 public struct HttpRequest {
-    public let uri: String
+    public let uri: URI
     public let headers: [String: String]
     public let body: Data
     public init(request: Data) throws {
@@ -60,7 +60,8 @@ public struct HttpRequest {
             throw NSError(domain: "invalid request uri: \(head)", code: 400)
         }
         let uriRange = uriMatch.range(at: 2)
-        uri = (head as NSString).substring(with: uriRange)
+        let uriString = (head as NSString).substring(with: uriRange)
+        uri = URI(uri: uriString)
         let keyValues = lines.compactMap { line -> (String, String)? in
             guard let expressionMatch = headerPattern.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) else {
                 return nil
@@ -74,8 +75,41 @@ public struct HttpRequest {
         }
         headers = Dictionary(uniqueKeysWithValues: keyValues)
     }
+    public var content: String? {
+        return String(data: body, encoding: .utf8)
+    }
 }
 
+public struct URI {
+    public let raw: String
+    public let path: [String]
+    public let parameters: [String: String]
+    public init(uri: String) {
+        raw = uri
+        let resources = uri.split(separator: "?").map { String($0) }
+        let api: String
+        if let _api = resources.first {
+            api = _api
+            if resources.count > 1, let _params = resources.last {
+                let keyValues = _params.split(separator: "&").compactMap { expression -> (String, String)? in
+                    guard let equal = expression.firstIndex(of: "=") else {
+                        return nil
+                    }
+                    let key = expression[expression.startIndex..<equal]
+                    let value = expression[expression.index(equal, offsetBy: 1)..<expression.endIndex]
+                    return (String(key), String(value))
+                }
+                parameters = Dictionary(uniqueKeysWithValues: keyValues)
+            } else {
+                parameters = [:]
+            }
+        } else {
+            api = uri
+            parameters = [:]
+        }
+        path = api.split(separator: "/").map { String($0) }
+    }
+}
 public extension String {
     func trim() -> String {
         let blanks = CharacterSet(charactersIn: " \t\r\n")

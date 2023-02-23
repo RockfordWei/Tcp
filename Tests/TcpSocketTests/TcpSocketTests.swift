@@ -30,7 +30,7 @@ final class TcpSocketTests: XCTestCase {
         server.close()
     }
     func testUrlSession() throws {
-        guard let url = URL(string: "http://localhost:8181/") else {
+        guard let url = URL(string: "http://localhost:8181/api/v1/get?user=guest&feedback=none") else {
             throw NSError(domain: "invalid url", code: 0)
         }
         let request = URLRequest(url: url)
@@ -75,11 +75,11 @@ class HttpTestServer: TcpSocketDelegate {
     func onDataArrival(tcpSocket: TcpSocket) {
         do {
             let request = try tcpSocket.recv()
-            if let text = String(data: request, encoding: .utf8) {
-                NSLog("\n(recv)\n\(text)\n(end)")
-            }
             let httpRequest = try HttpRequest(request: request)
-            print("request", httpRequest)
+            XCTAssertEqual(httpRequest.uri.raw, "/api/v1/get?user=guest&feedback=none")
+            XCTAssertEqual(httpRequest.uri.path, ["api", "v1", "get"])
+            XCTAssertEqual(httpRequest.uri.parameters, ["feedback": "none", "user": "guest"])
+            XCTAssertTrue(httpRequest.body.isEmpty)
             let response = try HttpResponse(encodable: ResponseBody(error: 0))
             let content = try response.encode()
             try tcpSocket.send(data: content)
