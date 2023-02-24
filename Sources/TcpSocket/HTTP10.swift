@@ -37,9 +37,9 @@ open class HttpResponse {
 
 public struct HttpRequest {
     public enum Method: String {
-        case GET = "GET"
-        case POST = "POST"
-        case HEAD = "HEAD"
+        case GET
+        case POST
+        case HEAD
     }
     public let uri: URI
     public let method: Method

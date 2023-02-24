@@ -56,7 +56,7 @@ final class TcpSocketTests: XCTestCase {
     func testCurl() throws {
         let urlString = "http://localhost:8181/api/v1/get?user=guest&feedback=none"
         #if os(Linux) || os(macOS)
-        let response: ResponseBody? = try curl(postBody: RequestBody(content: "information", timestamp: Date()),  url: urlString)
+        let response: ResponseBody? = try curl(postBody: RequestBody(content: "information", timestamp: Date()), url: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
         #else
