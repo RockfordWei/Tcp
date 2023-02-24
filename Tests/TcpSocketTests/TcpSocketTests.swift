@@ -24,13 +24,17 @@ final class TcpSocketTests: XCTestCase {
         server.shutdown()
         server.close()
     }
-    func curl<T: Decodable>(url: String) throws -> T? {
+    func curl<T: Decodable>(postBody: Codable, url: String) throws -> T? {
         let process = Process()
         let stdOut = Pipe()
         let stdErr = Pipe()
         process.standardOutput = stdOut
         process.standardError = stdErr
-        process.arguments = ["-c", "curl -s -0 -4 '\(url)'"]
+        let content = try JSONEncoder().encode(postBody)
+        guard let textContent = String(data: content, encoding: .utf8) else {
+            throw NSError(domain: "invalid json string", code: 0)
+        }
+        process.arguments = ["-c", "curl -s -0 -4 -X POST -d '\(textContent)' 'data=/tmp/random.bin' '\(url)'"]
         process.executableURL = URL(string: "file:///bin/bash")
         process.standardInput = nil
         try process.run()
@@ -51,8 +55,8 @@ final class TcpSocketTests: XCTestCase {
     }
     func testCurl() throws {
         let urlString = "http://localhost:8181/api/v1/get?user=guest&feedback=none"
-        #if os(Linux)
-        let response: ResponseBody? = try curl(url: urlString)
+        #if os(Linux) || os(macOS)
+        let response: ResponseBody? = try curl(postBody: RequestBody(content: "information", timestamp: Date()),  url: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
         #else
@@ -94,12 +98,19 @@ final class TcpSocketTests: XCTestCase {
 struct ResponseBody: Codable {
     let error: Int
 }
+struct RequestBody: Codable {
+    let content: String
+    let timestamp: Date
+}
 class HttpTestServerDelegate: HttpServerDelegate {
     func onSession(request: HttpRequest) throws -> HttpResponse? {
         XCTAssertEqual(request.uri.raw, "/api/v1/get?user=guest&feedback=none")
         XCTAssertEqual(request.uri.path, ["api", "v1", "get"])
         XCTAssertEqual(request.uri.parameters, ["feedback": "none", "user": "guest"])
-        XCTAssertTrue(request.body.isEmpty)
+        XCTAssertEqual(request.method, .POST)
+        let requestBody = try JSONDecoder().decode(RequestBody.self, from: request.body)
+        XCTAssertEqual(requestBody.content, "information")
+        NSLog("request http version \(request.version) date: \(requestBody.timestamp)")
         return try HttpResponse(encodable: ResponseBody(error: 0))
     }
 }
