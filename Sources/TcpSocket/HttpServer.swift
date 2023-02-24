@@ -29,6 +29,7 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             guard !requestData.isEmpty else {
                 return
             }
+            NSLog("\(requestData.count) bytes received")
             request = try HttpRequest(request: requestData)
         } catch {
             let nserror = error as NSError

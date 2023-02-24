@@ -36,7 +36,14 @@ open class HttpResponse {
 }
 
 public struct HttpRequest {
+    public enum Method: String {
+        case GET
+        case POST
+        case HEAD
+    }
     public let uri: URI
+    public let method: Method
+    public let version: String
     public let headers: [String: String]
     public let body: Data
     public init(request: Data) throws {
@@ -59,8 +66,13 @@ public struct HttpRequest {
         guard let uriMatch = uriPattern.firstMatch(in: top, range: NSRange(location: 0, length: top.count)) else {
             throw NSError(domain: "Bad Request", code: 400)
         }
+        let headString = head as NSString
+        let methodRange = uriMatch.range(at: 1)
+        method = Method(rawValue: headString.substring(with: methodRange).uppercased()) ?? .GET
         let uriRange = uriMatch.range(at: 2)
-        let uriString = (head as NSString).substring(with: uriRange)
+        let uriString = headString.substring(with: uriRange)
+        let versionRange = uriMatch.range(at: 3)
+        version = headString.substring(with: versionRange)
         uri = URI(uri: uriString)
         let keyValues = lines.compactMap { line -> (String, String)? in
             guard let expressionMatch = headerPattern.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) else {
