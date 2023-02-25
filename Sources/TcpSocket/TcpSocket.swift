@@ -29,6 +29,7 @@ open class TcpSocket {
     public var live = true
     public var delegate: TcpSocketDelegate?
     internal var clients: Set<TcpSocket> = []
+    public var buffer = Data()
     public init(originalSocket: Int32, ipAddress: String, port: UInt16) {
         _socket = originalSocket
         _ip = ipAddress

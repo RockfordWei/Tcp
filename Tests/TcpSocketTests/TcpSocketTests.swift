@@ -9,9 +9,16 @@ import XCTest
 final class TcpSocketTests: XCTestCase {
     var server: HttpServer! = nil
     let port: UInt16 = 8181
+    static let randomBytes: [UInt8] = (0..<8000).map { _ -> UInt8 in
+        return UInt8.random(in: 0..<255)
+    }
+    let tmpPath = "/tmp/httptest.bin"
     override func setUp() {
         super.setUp()
         do {
+            let data = Data(Self.randomBytes)
+            let url = try XCTUnwrap(URL(string: "file://\(tmpPath)"))
+            try data.write(to: url)
             let web = HttpTestServerDelegate()
             server = try HttpServer(port: port, delegate: web)
         } catch {
@@ -23,18 +30,15 @@ final class TcpSocketTests: XCTestCase {
         server.live = false
         server.shutdown()
         server.close()
+        unlink(tmpPath)
     }
-    func curl<T: Decodable>(postBody: Codable, url: String) throws -> T? {
+    func curl<T: Decodable>(filePath: String, url: String) throws -> T? {
         let process = Process()
         let stdOut = Pipe()
         let stdErr = Pipe()
         process.standardOutput = stdOut
         process.standardError = stdErr
-        let content = try JSONEncoder().encode(postBody)
-        guard let textContent = String(data: content, encoding: .utf8) else {
-            throw NSError(domain: "invalid json string", code: 0)
-        }
-        process.arguments = ["-c", "curl -s -0 -4 -X POST -d '\(textContent)' 'data=/tmp/random.bin' '\(url)'"]
+        process.arguments = ["-c", "curl -s -0 -4 -F 'data=@\(filePath)' '\(url)'"]
         process.executableURL = URL(string: "file:///bin/bash")
         process.standardInput = nil
         try process.run()
@@ -56,7 +60,7 @@ final class TcpSocketTests: XCTestCase {
     func testCurl() throws {
         let urlString = "http://localhost:8181/api/v1/get?user=guest&feedback=none"
         #if os(Linux) || os(macOS)
-        let response: ResponseBody? = try curl(postBody: RequestBody(content: "information", timestamp: Date()), url: urlString)
+        let response: ResponseBody? = try curl(filePath: tmpPath, url: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
         #else
@@ -108,9 +112,8 @@ class HttpTestServerDelegate: HttpServerDelegate {
         XCTAssertEqual(request.uri.path, ["api", "v1", "get"])
         XCTAssertEqual(request.uri.parameters, ["feedback": "none", "user": "guest"])
         XCTAssertEqual(request.method, .POST)
-        let requestBody = try JSONDecoder().decode(RequestBody.self, from: request.body)
-        XCTAssertEqual(requestBody.content, "information")
-        NSLog("request http version \(request.version) date: \(requestBody.timestamp)")
+        let range = try XCTUnwrap(request.body.firstRange(of: TcpSocketTests.randomBytes))
+        NSLog("found payload: \(range)")
         return try HttpResponse(encodable: ResponseBody(error: 0))
     }
 }
