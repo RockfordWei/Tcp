@@ -23,14 +23,18 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
         serve()
     }
     public func onDataArrival(tcpSocket: TcpSocket) {
-        var request: HttpRequest?
+        var requestCandidate: HttpRequest? = nil
         do {
             let requestData = try tcpSocket.recv()
             guard !requestData.isEmpty else {
                 return
             }
             NSLog("\(requestData.count) bytes received")
-            request = try HttpRequest(request: requestData)
+            tcpSocket.buffer.append(requestData)
+            guard let _request = try HttpRequest(request: tcpSocket.buffer) else {
+                return
+            }
+            requestCandidate = _request
         } catch {
             let nserror = error as NSError
             let response = HttpResponse(content: "Bad Request: \(error)")
@@ -42,7 +46,10 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             tcpSocket.close()
             tcpSocket.live = false
         }
-        guard let request = request else { return }
+        guard requestCandidate != nil,
+            let request = requestCandidate else {
+            return
+        }
         var responseData: Data?
         do {
             if let response = try sessionDelegate.onSession(request: request) {

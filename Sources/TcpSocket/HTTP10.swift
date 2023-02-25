@@ -46,7 +46,7 @@ public struct HttpRequest {
     public let version: String
     public let headers: [String: String]
     public let body: Data
-    public init(request: Data) throws {
+    public init?(request: Data) throws {
         let headData: Data
         if let separator = request.firstRange(of: "\r\n\r\n".data(using: .utf8) ?? Data()) {
             headData = request[request.startIndex..<separator.lowerBound]
@@ -56,14 +56,14 @@ public struct HttpRequest {
             body = Data()
         }
         let head = String(data: headData, encoding: .utf8) ?? ""
-        var lines = head.split(separator: "\r\n").map { String($0).trim() }
+        var lines = head.split(separator: "\r\n").map { String($0).trimmed }
         let uriPattern = try NSRegularExpression(pattern: "^(GET|POST|HEAD) (.*) HTTP/([0-9.]+)$", options: .caseInsensitive)
         let headerPattern = try NSRegularExpression(pattern: "^([a-zA-Z\\-]+):\\s(.*)$")
         guard !lines.isEmpty else {
             throw NSError(domain: "Bad Request", code: 400)
         }
         let top = lines.removeFirst()
-        guard let uriMatch = uriPattern.firstMatch(in: top, range: NSRange(location: 0, length: top.count)) else {
+        guard let uriMatch = uriPattern.firstMatch(in: top, range: top.range) else {
             throw NSError(domain: "Bad Request", code: 400)
         }
         let headString = head as NSString
@@ -75,7 +75,7 @@ public struct HttpRequest {
         version = headString.substring(with: versionRange)
         uri = URI(uri: uriString)
         let keyValues = lines.compactMap { line -> (String, String)? in
-            guard let expressionMatch = headerPattern.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) else {
+            guard let expressionMatch = headerPattern.firstMatch(in: line, range: line.range) else {
                 return nil
             }
             let keyRange = expressionMatch.range(at: 1)
@@ -86,6 +86,12 @@ public struct HttpRequest {
             return (key, value)
         }
         headers = Dictionary(uniqueKeysWithValues: keyValues)
+        if let textContentLength = headers["Content-Length"], let contentLength = Int(textContentLength) {
+            let size = body.count
+            guard size >= contentLength else {
+                return nil
+            }
+        }
     }
     public var content: String? {
         return String(data: body, encoding: .utf8)
@@ -123,8 +129,11 @@ public struct URI {
     }
 }
 public extension String {
-    func trim() -> String {
+    var trimmed: String {
         let blanks = CharacterSet(charactersIn: " \t\r\n")
         return trimmingCharacters(in: blanks)
+    }
+    var range: NSRange {
+        return NSRange(location: 0, length: count)
     }
 }
