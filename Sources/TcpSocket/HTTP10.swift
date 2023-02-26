@@ -46,6 +46,7 @@ public struct HttpRequest {
     public let version: String
     public let headers: [String: String]
     public let body: Data
+    public static var contentLengthLimitation = 1048576
     public init?(request: Data) throws {
         let headData: Data
         if let separator = request.firstRange(of: "\r\n\r\n".data(using: .utf8) ?? Data()) {
@@ -87,6 +88,9 @@ public struct HttpRequest {
         }
         headers = Dictionary(uniqueKeysWithValues: keyValues)
         if let textContentLength = headers["Content-Length"], let contentLength = Int(textContentLength) {
+            if contentLength > Self.contentLengthLimitation {
+                throw NSError(domain: "Bad Request (oversized)", code: 400, userInfo: ["Content-Length": contentLength, "Content-Length-Limitation": Self.contentLengthLimitation])
+            }
             let size = body.count
             guard size >= contentLength else {
                 return nil
