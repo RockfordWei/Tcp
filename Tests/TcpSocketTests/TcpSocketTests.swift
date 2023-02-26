@@ -68,14 +68,14 @@ final class TcpSocketTests: XCTestCase {
         return try curl(command: command)
     }
     func testGet() throws {
-        let urlString = "'http://localhost:8181/api/v1/get?user=guest&timeout=600'"
+        let urlString = "'http://localhost:8181/api/v1/get?user=\("guest anonymous".urlEncoded)&timeout=\("^600".urlEncoded)'"
         let response: ResponseBody? = try curl(command: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
     }
     func testPostParameters() throws {
         let urlString = "http://localhost:8181/api/v1/postParameters"
-        let response: ResponseBody? = try curlPostParameters(parameters: ["key1": "value1", "key2": "value2", "key3": "value3"], url: urlString)
+        let response: ResponseBody? = try curlPostParameters(parameters: ["key1": "value1?", "key2": "value2:", "key3": "value3|"], url: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
     }
@@ -108,10 +108,10 @@ class HttpTestServerDelegate: HttpServerDelegate {
         switch api {
         case "get":
             XCTAssertEqual(request.method, .GET)
-            XCTAssertEqual(request.uri.parameters, ["user": "guest", "timeout": "600"])
+            XCTAssertEqual(request.uri.parameters, ["user": "guest anonymous", "timeout": "^600"])
         case "postParameters":
             XCTAssertEqual(request.method, .POST)
-            XCTAssertEqual(request.postFields, ["key1": "value1", "key2": "value2", "key3": "value3"])
+            XCTAssertEqual(request.postFields, ["key1": "value1?", "key2": "value2:", "key3": "value3|"])
         case "postFiles":
             XCTAssertEqual(request.method, .POST)
             let files = request.files

@@ -136,7 +136,9 @@ public extension HttpRequest {
         guard let postBodyString = String(data: body, encoding: .utf8) else {
             return []
         }
-        return postBodyString.split(separator: "&").compactMap { expression -> (String, String)? in
+        return postBodyString.split(separator: "&").compactMap { exp -> (String, String)? in
+            print(String(exp))
+            let expression = String(exp).urlDecoded
             guard let equal = expression.firstIndex(of: Character("=")) else {
                 return nil
             }
@@ -145,7 +147,7 @@ public extension HttpRequest {
             if key.isEmpty || value.isEmpty {
                 return nil
             }
-            return (String(key), String(value))
+            return (String(key).urlDecoded, String(value).urlDecoded)
         }
     }
     /// post fields, if applicable
@@ -189,6 +191,9 @@ public struct HttpPostFile {
 public struct URI {
     public let raw: String
     public let path: [String]
+    /// in case of parameters with duplicated keys to implement value array, use parameterArray instead.
+    public let parameterArray: [(String, String)]
+    /// will remove duplicated keys
     public let parameters: [String: String]
     public init(uri: String) {
         raw = uri
@@ -197,20 +202,22 @@ public struct URI {
         if let _api = resources.first {
             api = _api
             if resources.count > 1, let _params = resources.last {
-                let keyValues = _params.split(separator: "&").compactMap { expression -> (String, String)? in
+                parameterArray = _params.split(separator: "&").compactMap { expression -> (String, String)? in
                     guard let equal = expression.firstIndex(of: "=") else {
                         return nil
                     }
                     let key = expression[expression.startIndex..<equal]
                     let value = expression[expression.index(equal, offsetBy: 1)..<expression.endIndex]
-                    return (String(key), String(value))
+                    return (String(key).urlDecoded, String(value).urlDecoded)
                 }
-                parameters = Dictionary(uniqueKeysWithValues: keyValues)
+                parameters = Dictionary(uniqueKeysWithValues: parameterArray)
             } else {
+                parameterArray = []
                 parameters = [:]
             }
         } else {
             api = uri
+            parameterArray = []
             parameters = [:]
         }
         path = api.split(separator: "/").map { String($0) }
@@ -225,6 +232,9 @@ public extension String {
         return NSRange(location: 0, length: count)
     }
     var urlEncoded: String {
-        return addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
+        return addingPercentEncoding(withAllowedCharacters: .urlPasswordAllowed) ?? self
+    }
+    var urlDecoded: String {
+        return removingPercentEncoding ?? self
     }
 }
