@@ -13,14 +13,33 @@ final class TcpSocketTests: XCTestCase {
         return UInt8.random(in: 0..<255)
     }
     let tmpPath = "/tmp/httptest.png"
+    let routes: [HttpRoute] = [
+        HttpRoute(api: "/api/v1/get", method: .GET, handler: { request throws -> HttpResponse? in
+            XCTAssertEqual(request.uri.parameters, ["user": "guest anonymous", "timeout": "^600"])
+            return try HttpResponse(encodable: ResponseBody(error: 0))
+        }),
+        HttpRoute(api: "/api/v1/postParameters", method: .POST, handler: { request throws -> HttpResponse? in
+            XCTAssertEqual(request.postFields, ["key1": "value1?", "key2": "value2:", "key3": "value3|"])
+            return try HttpResponse(encodable: ResponseBody(error: 0))
+        }),
+        HttpRoute(api: "/api/v1/postFiles", method: .POST, handler: { request throws -> HttpResponse? in
+            let files = request.files
+            XCTAssertEqual(files.count, 3)
+            let data = Data(TcpSocketTests.randomBytes)
+            for file in files {
+                XCTAssertEqual(file.content, data)
+                print(file.attributes)
+            }
+            return try HttpResponse(encodable: ResponseBody(error: 0))
+        })
+    ]
     override func setUp() {
         super.setUp()
         do {
             let data = Data(Self.randomBytes)
             let url = try XCTUnwrap(URL(string: "file://\(tmpPath)"))
             try data.write(to: url)
-            let web = HttpTestServerDelegate()
-            server = try HttpServer(port: port, delegate: web)
+            server = try HttpServer(port: port, routes: routes)
         } catch {
             XCTFail("cannot setup because \(error)")
         }
@@ -97,33 +116,4 @@ struct ResponseBody: Codable {
 struct RequestBody: Codable {
     let content: String
     let timestamp: Date
-}
-class HttpTestServerDelegate: HttpServerDelegate {
-    func onSession(request: HttpRequest) throws -> HttpResponse? {
-        print(request.headers)
-        XCTAssertEqual(request.uri.path.count, 3)
-        XCTAssertEqual(request.uri.path[0], "api")
-        XCTAssertEqual(request.uri.path[1], "v1")
-        let api = request.uri.path[2]
-        switch api {
-        case "get":
-            XCTAssertEqual(request.method, .GET)
-            XCTAssertEqual(request.uri.parameters, ["user": "guest anonymous", "timeout": "^600"])
-        case "postParameters":
-            XCTAssertEqual(request.method, .POST)
-            XCTAssertEqual(request.postFields, ["key1": "value1?", "key2": "value2:", "key3": "value3|"])
-        case "postFiles":
-            XCTAssertEqual(request.method, .POST)
-            let files = request.files
-            XCTAssertEqual(files.count, 3)
-            let data = Data(TcpSocketTests.randomBytes)
-            for file in files {
-                XCTAssertEqual(file.content, data)
-                print(file.attributes)
-            }
-        default:
-            XCTFail("unknown api: \(api)")
-        }
-        return try HttpResponse(encodable: ResponseBody(error: 0))
-    }
 }

@@ -7,15 +7,24 @@
 
 import Foundation
 
-public protocol HttpServerDelegate: AnyObject {
-    func onSession(request: HttpRequest) throws -> HttpResponse?
+public struct HttpRoute: Hashable {
+    public let api: String
+    public let method: HttpRequest.Method
+    public let handler: (_ request: HttpRequest) throws -> HttpResponse?
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        return lhs.api == rhs.api && lhs.method == rhs.method
+    }
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(method)
+        hasher.combine(api)
+    }
 }
 
 public class HttpServer: TcpSocket, TcpSocketDelegate {
-    internal let sessionDelegate: HttpServerDelegate
+    internal let _routes: Set<HttpRoute>
     
-    public init(port: UInt16, delegate: HttpServerDelegate) throws {
-        sessionDelegate = delegate
+    public init(port: UInt16, routes: [HttpRoute]) throws {
+        _routes = Set<HttpRoute>(routes)
         try super.init()
         self.delegate = self
         try bind(port: port)
@@ -51,8 +60,9 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
         }
         var responseData: Data?
         do {
-            if let response = try sessionDelegate.onSession(request: request) {
-                responseData = try response.encode()
+            if let route = _routes.first(where: { request.method == $0.method && request.uri.raw.hasPrefix($0.api)} ) {
+                let resp = try route.handler(request)
+                responseData = try resp?.encode()
             } else {
                 responseData = nil
             }

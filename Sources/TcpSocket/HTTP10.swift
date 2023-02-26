@@ -223,6 +223,7 @@ public struct URI {
         path = api.split(separator: "/").map { String($0) }
     }
 }
+
 public extension String {
     var trimmed: String {
         let blanks = CharacterSet(charactersIn: " \t\r\n")
