@@ -12,7 +12,7 @@ final class TcpSocketTests: XCTestCase {
     static let randomBytes: [UInt8] = (0..<8000).map { _ -> UInt8 in
         return UInt8.random(in: 0..<255)
     }
-    let tmpPath = "/tmp/httptest.bin"
+    let tmpPath = "/tmp/httptest.png"
     override func setUp() {
         super.setUp()
         do {
@@ -38,7 +38,7 @@ final class TcpSocketTests: XCTestCase {
         let stdErr = Pipe()
         process.standardOutput = stdOut
         process.standardError = stdErr
-        process.arguments = ["-c", "curl -s -0 -4 -F 'data=@\(filePath)' '\(url)'"]
+        process.arguments = ["-c", "curl -s -0 -4 -F 'file1=@\(filePath)' -F 'file2=@\(filePath)' -F 'file3=@\(filePath)' '\(url)'"]
         process.executableURL = URL(string: "file:///bin/bash")
         process.standardInput = nil
         try process.run()
@@ -112,8 +112,13 @@ class HttpTestServerDelegate: HttpServerDelegate {
         XCTAssertEqual(request.uri.path, ["api", "v1", "get"])
         XCTAssertEqual(request.uri.parameters, ["feedback": "none", "user": "guest"])
         XCTAssertEqual(request.method, .POST)
-        let range = try XCTUnwrap(request.body.firstRange(of: TcpSocketTests.randomBytes))
-        NSLog("found payload: \(range)")
+        let files = request.files
+        XCTAssertEqual(files.count, 3)
+        let data = Data(TcpSocketTests.randomBytes)
+        for file in files {
+            XCTAssertEqual(file.content, data)
+            print(file.attributes)
+        }
         return try HttpResponse(encodable: ResponseBody(error: 0))
     }
 }
