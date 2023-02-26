@@ -23,7 +23,7 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
         serve()
     }
     public func onDataArrival(tcpSocket: TcpSocket) {
-        var request: HttpRequest?
+        var httpRequest: HttpRequest?
         do {
             let requestData = try tcpSocket.recv()
             guard !requestData.isEmpty else {
@@ -34,7 +34,7 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             guard let _request = try HttpRequest(request: tcpSocket.buffer) else {
                 return
             }
-            request = _request
+            httpRequest = _request
         } catch {
             let nserror = error as NSError
             let response = HttpResponse(content: "Bad Request: \(error)")
@@ -46,7 +46,7 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             tcpSocket.close()
             tcpSocket.live = false
         }
-        guard let request = request else {
+        guard let request = httpRequest else {
             return
         }
         var responseData: Data?
