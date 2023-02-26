@@ -49,8 +49,8 @@ public struct HttpRequest {
     public init?(request: Data) throws {
         let headData: Data
         if let separator = request.firstRange(of: "\r\n\r\n".data(using: .utf8) ?? Data()) {
-            headData = request[request.startIndex..<separator.lowerBound]
-            body = request[separator.upperBound..<request.endIndex]
+            headData = request[..<separator.lowerBound]
+            body = request[separator.upperBound...]
         } else {
             headData = request
             body = Data()
@@ -95,6 +95,68 @@ public struct HttpRequest {
     }
     public var content: String? {
         return String(data: body, encoding: .utf8)
+    }
+}
+
+public extension HttpRequest {
+    var files: [HttpPostFile] {
+        guard let contentTypePattern = try? NSRegularExpression(pattern: "^multipart/form-data; boundary=(.*)$"),
+              let contentType = headers["Content-Type"],
+              let boundaryMatch = contentTypePattern.firstMatch(in: contentType, range: contentType.range) else {
+            return []
+        }
+        let boundaryRange = boundaryMatch.range(at: 1)
+        let boundaryText = "--" + (contentType as NSString).substring(with: boundaryRange)
+        guard let boundary = boundaryText.data(using: .utf8) else {
+            return []
+        }
+        guard body.count > 4 else {
+            return []
+        }
+        var multiparts = body
+        var results: [HttpPostFile] = []
+        while !multiparts.isEmpty {
+            guard let dataRange = multiparts.firstRange(of: boundary) else {
+                break
+            }
+            let part = multiparts[..<dataRange.lowerBound]
+            if let file = HttpPostFile(multipartBlock: part) {
+                results.append(file)
+            }
+            multiparts = multiparts[dataRange.upperBound...]
+        }
+        return results
+    }
+}
+
+public struct HttpPostFile {
+    let attributes: [String: String]
+    let content: Data
+    public init?(multipartBlock: Data) {
+        guard multipartBlock.count > 4 else { return nil }
+        let block = multipartBlock.dropFirst(2).dropLast(2)
+        guard let lineBreaks = "\r\n\r\n".data(using: .utf8),
+              let location = block.firstRange(of: lineBreaks) else {
+            return nil
+        }
+        let headText = (String(data: block[..<location.lowerBound], encoding: .utf8) ?? "")
+            .replacingOccurrences(of: "\r\n", with: ";")
+            .replacingOccurrences(of: ": ", with: "=")
+        content = block[location.upperBound...]
+        print(content.count)
+        let headers: [(String, String)] = headText
+            .split(separator: ";")
+            .compactMap { expression -> (String, String)? in
+                let exp = String(expression).split(separator: "=")
+                guard exp.count == 2, let key = exp.first, let value = exp.last else {
+                    return nil
+                }
+                return (String(key).trimmed, String(value).trimmed)
+            }
+        guard !headers.isEmpty else {
+            return nil
+        }
+        attributes = Dictionary(uniqueKeysWithValues: headers)
     }
 }
 
