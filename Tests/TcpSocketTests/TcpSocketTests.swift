@@ -32,13 +32,13 @@ final class TcpSocketTests: XCTestCase {
         server.close()
         unlink(tmpPath)
     }
-    func curl<T: Decodable>(filePath: String, url: String) throws -> T? {
+    func curl<T: Decodable>(command: String) throws -> T? {
         let process = Process()
         let stdOut = Pipe()
         let stdErr = Pipe()
         process.standardOutput = stdOut
         process.standardError = stdErr
-        process.arguments = ["-c", "curl -s -0 -4 -F 'file1=@\(filePath)' -F 'file2=@\(filePath)' -F 'file3=@\(filePath)' '\(url)'"]
+        process.arguments = ["-c", "curl -s -0 -4 \(command)"]
         process.executableURL = URL(string: "file:///bin/bash")
         process.standardInput = nil
         try process.run()
@@ -57,46 +57,38 @@ final class TcpSocketTests: XCTestCase {
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
-    func testCurl() throws {
-        let urlString = "http://localhost:8181/api/v1/get?user=guest&feedback=none"
-        #if os(Linux) || os(macOS)
-        let response: ResponseBody? = try curl(filePath: tmpPath, url: urlString)
+    func curlPostFile<T: Decodable>(files: [String], url: String) throws -> T? {
+        let fileString = files.enumerated().map { "-F 'file\($0.offset)=@\($0.element)'" }.joined(separator: " ")
+        let command = "\(fileString) '\(url)'"
+        return try curl(command: command)
+    }
+    func curlPostParameters<T: Decodable>(parameters: [String: String], url: String) throws -> T? {
+        let parameterString = parameters.map { "\($0.key.urlEncoded)=\($0.value.urlEncoded)" }.joined(separator: "&")
+        let command = "-X POST -d '\(parameterString)' '\(url)'"
+        return try curl(command: command)
+    }
+    func testGet() throws {
+        let urlString = "'http://localhost:8181/api/v1/get?user=guest&timeout=600'"
+        let response: ResponseBody? = try curl(command: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
-        #else
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "invalid url", code: 0)
-        }
-        let request = URLRequest(url: url)
-        let exp = expectation(description: "url")
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let data = data {
-                if let text = String(data: data, encoding: .utf8) {
-                    NSLog("response text: \(text)")
-                } else {
-                    NSLog("response data: \(data)")
-                }
-                do {
-                    let responseBody = try JSONDecoder().decode(ResponseBody.self, from: data)
-                    XCTAssertEqual(responseBody.error, 0)
-                    exp.fulfill()
-                } catch {
-                    XCTFail("\(error)")
-                }
-            }
-            if let error = error {
-                NSLog("response error: \(error)")
-            }
-            if let response = response {
-                NSLog("response: \(response)")
-            }
-        }
-        task.resume()
-        wait(for: [exp], timeout: 10)
-        #endif
+    }
+    func testPostParameters() throws {
+        let urlString = "http://localhost:8181/api/v1/postParameters"
+        let response: ResponseBody? = try curlPostParameters(parameters: ["key1": "value1", "key2": "value2", "key3": "value3"], url: urlString)
+        let resp = try XCTUnwrap(response)
+        XCTAssertEqual(resp.error, 0)
+    }
+    func testPostFiles() throws {
+        let urlString = "http://localhost:8181/api/v1/postFiles"
+        let response: ResponseBody? = try curlPostFile(files: [tmpPath, tmpPath, tmpPath], url: urlString)
+        let resp = try XCTUnwrap(response)
+        XCTAssertEqual(resp.error, 0)
     }
     static var allTests = [
-        ("testCurl", testCurl)
+        ("testGet", testGet),
+        ("testPostParameters", testPostParameters),
+        ("testPostFiles", testPostFiles)
     ]
 }
 struct ResponseBody: Codable {
@@ -108,16 +100,29 @@ struct RequestBody: Codable {
 }
 class HttpTestServerDelegate: HttpServerDelegate {
     func onSession(request: HttpRequest) throws -> HttpResponse? {
-        XCTAssertEqual(request.uri.raw, "/api/v1/get?user=guest&feedback=none")
-        XCTAssertEqual(request.uri.path, ["api", "v1", "get"])
-        XCTAssertEqual(request.uri.parameters, ["feedback": "none", "user": "guest"])
-        XCTAssertEqual(request.method, .POST)
-        let files = request.files
-        XCTAssertEqual(files.count, 3)
-        let data = Data(TcpSocketTests.randomBytes)
-        for file in files {
-            XCTAssertEqual(file.content, data)
-            print(file.attributes)
+        print(request.headers)
+        XCTAssertEqual(request.uri.path.count, 3)
+        XCTAssertEqual(request.uri.path[0], "api")
+        XCTAssertEqual(request.uri.path[1], "v1")
+        let api = request.uri.path[2]
+        switch api {
+        case "get":
+            XCTAssertEqual(request.method, .GET)
+            XCTAssertEqual(request.uri.parameters, ["user": "guest", "timeout": "600"])
+        case "postParameters":
+            XCTAssertEqual(request.method, .POST)
+            XCTAssertEqual(request.postFields, ["key1": "value1", "key2": "value2", "key3": "value3"])
+        case "postFiles":
+            XCTAssertEqual(request.method, .POST)
+            let files = request.files
+            XCTAssertEqual(files.count, 3)
+            let data = Data(TcpSocketTests.randomBytes)
+            for file in files {
+                XCTAssertEqual(file.content, data)
+                print(file.attributes)
+            }
+        default:
+            XCTFail("unknown api: \(api)")
         }
         return try HttpResponse(encodable: ResponseBody(error: 0))
     }

@@ -129,6 +129,32 @@ public extension HttpRequest {
     }
 }
 
+public extension HttpRequest {
+    /// post fields, if applicable
+    /// *note*: field name can be duplicated to construct an array, so that's the reason we are using an array of tuple instead of a dictionary
+    var postFieldArray: [(String, String)] {
+        guard let postBodyString = String(data: body, encoding: .utf8) else {
+            return []
+        }
+        return postBodyString.split(separator: "&").compactMap { expression -> (String, String)? in
+            guard let equal = expression.firstIndex(of: Character("=")) else {
+                return nil
+            }
+            let key = expression[..<equal]
+            let value = expression[expression.index(after: equal)...]
+            if key.isEmpty || value.isEmpty {
+                return nil
+            }
+            return (String(key), String(value))
+        }
+    }
+    /// post fields, if applicable
+    /// *note*: in case of field name that duplicated for value array, use `postFieldArray` instead.
+    var postFields: [String: String] {
+        return Dictionary(uniqueKeysWithValues: postFieldArray)
+    }
+}
+
 public struct HttpPostFile {
     let attributes: [String: String]
     let content: Data
@@ -197,5 +223,8 @@ public extension String {
     }
     var range: NSRange {
         return NSRange(location: 0, length: count)
+    }
+    var urlEncoded: String {
+        return addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
     }
 }
