@@ -23,6 +23,7 @@ public struct HttpRoute: Hashable {
 public class HttpServer: TcpSocket, TcpSocketDelegate {
     internal let _routes: Set<HttpRoute>
     
+    public var webroot: String?
     public init(port: UInt16, routes: [HttpRoute]) throws {
         _routes = Set<HttpRoute>(routes)
         try super.init()
@@ -63,6 +64,18 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             if let route = _routes.first(where: { request.method == $0.method && request.uri.raw.hasPrefix($0.api)} ) {
                 let resp = try route.handler(request)
                 responseData = try resp?.encode()
+            } else if let localPath = self.webroot,
+                      request.method == .GET,
+                      let localResourceUrl = URL(string: "file://\(localPath)\(request.uri.raw)") {
+                let response: HttpResponse
+                if let fileContent = try? Data(contentsOf: localResourceUrl) {
+                    response = HttpResponse(raw: fileContent)
+                    response.headers["Content-Type"] = localResourceUrl.sniffMIME()
+                } else {
+                    response = HttpResponse(content: "Not Found")
+                    response.code = 404
+                }
+                responseData = try? response.encode()
             } else {
                 responseData = nil
             }

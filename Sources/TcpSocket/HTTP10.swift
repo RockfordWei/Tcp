@@ -243,3 +243,163 @@ public extension String {
         return removingPercentEncoding ?? self
     }
 }
+
+public extension URL {
+    func sniffMIME() -> String {
+        let defaultMime = "application/octet-stream"
+        guard let suffixSubstring = lastPathComponent.split(separator: ".").last else {
+            return defaultMime
+        }
+        let suffix = String(suffixSubstring).lowercased()
+        let mime: String
+        switch suffix {
+        case "aac": // AAC audio
+            mime = "audio/aac"
+        case "abw": // AbiWord document
+            mime = "application/x-abiword"
+        case "arc": // Archive document (multiple files embedded)
+            mime = "application/x-freearc"
+        case "avif": // AVIF image
+            mime = "image/avif"
+        case "avi": // AVI: Audio Video Interleave
+            mime = "video/x-msvideo"
+        case "azw": // Amazon Kindle eBook format
+            mime = "application/vnd.amazon.ebook"
+        case "bin": // Any kind of binary data
+            mime = "application/octet-stream"
+        case "bmp": // Windows OS/2 Bitmap Graphics
+            mime = "image/bmp"
+        case "bz": // BZip archive
+            mime = "application/x-bzip"
+        case "bz2": // BZip2 archive
+            mime = "application/x-bzip2"
+        case "cda": // CD audio
+            mime = "application/x-cdf"
+        case "csh": // C-Shell script
+            mime = "application/x-csh"
+        case "css": // Cascading Style Sheets (CSS)
+            mime = "text/css"
+        case "csv": // Comma-separated values (CSV)
+            mime = "text/csv"
+        case "doc": // Microsoft Word
+            mime = "application/msword"
+        case "docx": // Microsoft Word (OpenXML)
+            mime = "application/vnd.openxmlformats"
+        case "eot": // MS Embedded OpenType fonts
+            mime = "application/vnd.ms-fontobject"
+        case "epub": // Electronic publication (EPUB)
+            mime = "application/epub+zip"
+        case "gz": // GZip Compressed Archive
+            mime = "application/gzip"
+        case "gif": // Graphics Interchange Format (GIF)
+            mime = "image/gif"
+        case "htm", "html": // HyperText Markup Language (HTML)
+            mime = "text/html"
+        case "ico": // Icon format
+            mime = "image/vnd.microsoft.icon"
+        case "ics": // iCalendar format
+            mime = "text/calendar"
+        case "jar": // Java Archive (JAR)
+            mime = "application/java-archive"
+        case "jpeg, .jpg": // JPEG images
+            mime = "image/jpeg"
+        case "js": // JavaScript
+            mime = "text/javascript"
+        case "json": // JSON format
+            mime = "application/json"
+        case "jsonld": // JSON-LD format
+            mime = "application/ld+json"
+        case "mid", "midi": // Musical Instrument Digital Interface (MIDI)
+            mime = "audio/midi, audio/x-midi"
+        case "mjs": // JavaScript module
+            mime = "text/javascript"
+        case "mp3": // MP3 audio
+            mime = "audio/mpeg"
+        case "mp4": // MP4 video
+            mime = "video/mp4"
+        case "mpeg": // MPEG Video
+            mime = "video/mpeg"
+        case "mpkg": // Apple Installer Package
+            mime = "application/vnd.apple.installer+xml"
+        case "odp": // OpenDocument presentation document
+            mime = "application/vnd.oasis.opendocument.presentation"
+        case "ods": // OpenDocument spreadsheet document
+            mime = "application/vnd.oasis.opendocument.spreadsheet"
+        case "odt": // OpenDocument text document
+            mime = "application/vnd.oasis.opendocument.text"
+        case "oga": // OGG audio
+            mime = "audio/ogg"
+        case "ogv": // OGG video
+            mime = "video/ogg"
+        case "ogx": // OGG
+            mime = "application/ogg"
+        case "opus": // Opus audio
+            mime = "audio/opus"
+        case "otf": // OpenType font
+            mime = "font/otf"
+        case "png": // Portable Network Graphics
+            mime = "image/png"
+        case "pdf": // Adobe Portable Document Format (PDF)
+            mime = "application/pdf"
+        case "php": // Hypertext Preprocessor (Personal Home Page)
+            mime = "application/x-httpd-php"
+        case "ppt": // Microsoft PowerPoint
+            mime = "application/vnd.ms-powerpoint"
+        case "pptx": // Microsoft PowerPoint (OpenXML)
+            mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        case "rar": // RAR archive
+            mime = "application/vnd.rar"
+        case "rtf": // Rich Text Format (RTF)
+            mime = "application/rtf"
+        case "sh": // Bourne shell script
+            mime = "application/x-sh"
+        case "svg": // Scalable Vector Graphics (SVG)
+            mime = "image/svg+xml"
+        case "tar": // Tape Archive (TAR)
+            mime = "application/x-tar"
+        case "tif", "tiff": // Tagged Image File Format (TIFF)
+            mime = "image/tiff"
+        case "ts": // MPEG transport stream
+            mime = "video/mp2t"
+        case "ttf": // TrueType Font
+            mime = "font/ttf"
+        case "txt": // Text, (generally ASCII or ISO 8859-n)
+            mime = "text/plain"
+        case "vsd": // Microsoft Visio
+            mime = "application/vnd.visio"
+        case "wav": // Waveform Audio Format
+            mime = "audio/wav"
+        case "weba": // WEBM audio
+            mime = "audio/webm"
+        case "webm": // WEBM video
+            mime = "video/webm"
+        case "webp": // WEBP image
+            mime = "image/webp"
+        case "woff": // Web Open Font Format (WOFF)
+            mime = "font/woff"
+        case "woff2": // Web Open Font Format (WOFF)
+            mime = "font/woff2"
+        case "xhtml": // XHTML
+            mime = "application/xhtml+xml"
+        case "xls": // Microsoft Excel
+            mime = "application/vnd.ms-excel"
+        case "xlsx": // Microsoft Excel (OpenXML)
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "xml": // XML
+            mime = "application/xml"
+        case "xul": // XUL
+            mime = "application/vnd.mozilla.xul+xml"
+        case "zip": // ZIP archive
+            mime = "application/zip"
+        case "3gp": // 3GPP audio/video container
+            mime = "video/3gpp"
+        case "3g2": // 3GPP2 audio/video container
+            mime = "video/3gpp2"
+        case "7z": // 7-zip archive
+            mime = "application/x-7z-compressed"
+        default:
+            mime = defaultMime
+        }
+        return mime
+    }
+}
