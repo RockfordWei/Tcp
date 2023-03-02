@@ -14,15 +14,15 @@ final class TcpSocketTests: XCTestCase {
     }
     let tmpPath = "/tmp/httptest.png"
     let routes: [HttpRoute] = [
-        HttpRoute(api: "/api/v1/get", method: .GET, handler: { request throws -> HttpResponse? in
+        HttpRoute(api: "/api/v1/get", method: .GET) { request throws -> HttpResponse? in
             XCTAssertEqual(request.uri.parameters, ["user": "guest anonymous", "timeout": "^600"])
             return try HttpResponse(encodable: ResponseBody(error: 0))
-        }),
-        HttpRoute(api: "/api/v1/postParameters", method: .POST, handler: { request throws -> HttpResponse? in
+        },
+        HttpRoute(api: "/api/v1/postParameters", method: .POST) { request throws -> HttpResponse? in
             XCTAssertEqual(request.postFields, ["key1": "value1?", "key2": "value2:", "key3": "value3|"])
             return try HttpResponse(encodable: ResponseBody(error: 0))
-        }),
-        HttpRoute(api: "/api/v1/postFiles", method: .POST, handler: { request throws -> HttpResponse? in
+        },
+        HttpRoute(api: "/api/v1/postFiles", method: .POST) { request throws -> HttpResponse? in
             let files = request.files
             XCTAssertEqual(files.count, 3)
             let data = Data(TcpSocketTests.randomBytes)
@@ -31,7 +31,7 @@ final class TcpSocketTests: XCTestCase {
                 print(file.attributes)
             }
             return try HttpResponse(encodable: ResponseBody(error: 0))
-        })
+        }
     ]
     override func setUp() {
         super.setUp()
@@ -111,7 +111,8 @@ final class TcpSocketTests: XCTestCase {
     }
     func testStaticFile() throws {
         let urlString = "http://localhost:\(port)/httptest.png"
-        let _ = try curlData(command: "--output /tmp/result.png '\(urlString)'")
+        let result = try curlData(command: "--output /tmp/result.png '\(urlString)'")
+        NSLog("fetch result: \(result)")
         let localUrl = try XCTUnwrap(URL(string: "file:///tmp/result.png"))
         let data = try Data(contentsOf: localUrl)
         XCTAssertEqual(data, Data(Self.randomBytes))

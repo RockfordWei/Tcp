@@ -7,6 +7,7 @@
 
 import Foundation
 
+// swiftlint:disable operator_usage_whitespace
 public extension UInt32 {
     static func unpack(from bytesInHighEndFirstOrder: [UInt8], offset: Int) -> Self {
         let a = Self(bytesInHighEndFirstOrder[offset    ]) << 24
@@ -57,6 +58,7 @@ public extension UInt32 {
     }
 }
 
+// swiftlint:disable operator_usage_whitespace
 public extension UInt64 {
     var bytesInHighEndFirstOrder: [UInt8] {
         let a = UInt8((self & 0xFF00000000000000) >> 56)

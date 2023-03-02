@@ -61,7 +61,7 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
         }
         var responseData: Data?
         do {
-            if let route = _routes.first(where: { request.method == $0.method && request.uri.raw.hasPrefix($0.api)} ) {
+            if let route = _routes.first(where: { request.method == $0.method && request.uri.raw.hasPrefix($0.api) }) {
                 let resp = try route.handler(request)
                 responseData = try resp?.encode()
             } else if let localPath = self.webroot,
