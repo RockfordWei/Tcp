@@ -9,17 +9,11 @@ import Foundation
 
 public extension UInt32 {
     static func unpack(from bytesInHighEndFirstOrder: [UInt8], offset: Int) -> Self {
-        let size = bytesInHighEndFirstOrder.count
-        guard offset >= 0 && offset < size else {
-            return 0
-        }
-        var slice = offset + 4 > size ? bytesInHighEndFirstOrder[offset...] : bytesInHighEndFirstOrder[offset ..< (offset + 4)]
-        if slice.count < 4 {
-            let padding = Data(repeating: 0, count: 4 - slice.count)
-            slice.append(contentsOf: padding)
-        }
-        let n = slice.map { Self($0) }
-        return (n[0] << 24) | (n[1] << 16) | (n[2] << 8) | n[3]
+        let a = Self(bytesInHighEndFirstOrder[offset    ]) << 24
+        let b = Self(bytesInHighEndFirstOrder[offset + 1]) << 16
+        let c = Self(bytesInHighEndFirstOrder[offset + 2]) << 8
+        let d = Self(bytesInHighEndFirstOrder[offset + 3])
+        return a | b | c | d
     }
     var sigma0: Self {
         let x = rotateRight(by: 7)
@@ -55,33 +49,29 @@ public extension UInt32 {
         return (x & y) ^ (x & z) ^ (y & z)
     }
     var bytesInHighEndFirstOrder: [UInt8] {
-        let size = MemoryLayout.size(ofValue: self)
-        var data = Data(repeating: 0, count: size)
-        var this = self
-        memcpy(&data, &this, size)
-        return data.reversed().map { $0 }
+        let a = UInt8((self & 0xFF000000) >> 24)
+        let b = UInt8((self & 0x00FF0000) >> 16)
+        let c = UInt8((self & 0x0000FF00) >>  8)
+        let d = UInt8( self & 0x000000FF)
+        return [a, b, c, d]
     }
 }
 
 public extension UInt64 {
     var bytesInHighEndFirstOrder: [UInt8] {
-        let size = MemoryLayout.size(ofValue: self)
-        var data = Data(repeating: 0, count: size)
-        var this = self
-        memcpy(&data, &this, size)
-        return data.reversed().map { $0 }
+        let a = UInt8((self & 0xFF00000000000000) >> 56)
+        let b = UInt8((self & 0x00FF000000000000) >> 48)
+        let c = UInt8((self & 0x0000FF0000000000) >> 40)
+        let d = UInt8((self & 0x000000FF00000000) >> 32)
+        let e = UInt8((self & 0x00000000FF000000) >> 24)
+        let f = UInt8((self & 0x0000000000FF0000) >> 16)
+        let g = UInt8((self & 0x000000000000FF00) >>  8)
+        let h = UInt8( self & 0x00000000000000FF)
+        return [a, b, c, d, e, f, g, h]
     }
 }
 
 public extension Array {
-    func rotateRight(by numbers: UInt) -> Self {
-        let n = Int(numbers) % count
-        let i = index(0, offsetBy: count - n)
-        let head = self[..<i]
-        var tail = self[i...]
-        tail.append(contentsOf: head)
-        return Self(tail)
-    }
     func chunks(of stride: Int) -> [Self] {
         var array = [Self]()
         var i = 0
@@ -104,16 +94,11 @@ public extension Array where Element == UInt8 {
     func hex() -> String {
         return map { String(format: "%02x", $0) }.joined()
     }
-    func debug(_ msg: String) {
-        #if DEBUG
-        print(msg, hex())
-        #endif
-    }
 }
 
 public extension Data {
     var hex: String {
-        return map { String(format: "%02x", $0) }.joined()
+        return map { $0 }.hex()
     }
     var sha256: Data {
         return Data(SHA256(source: self).hash)
