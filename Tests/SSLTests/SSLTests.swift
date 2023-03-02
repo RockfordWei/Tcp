@@ -3,14 +3,71 @@ import Foundation
 import XCTest
 
 final class SSLTests: XCTestCase {
-    func _testSha256(text: String, wanted: String) throws {
+    func getSha256Data(input: Data) throws -> Data {
+        let process = Process()
+        let stdInp = Pipe()
+        let stdOut = Pipe()
+        let stdErr = Pipe()
+        process.standardOutput = stdOut
+        process.standardError = stdErr
+        process.arguments = ["-a", "256"]
+        process.executableURL = URL(string: "file:///usr/bin/shasum")
+        process.standardInput = stdInp
+        stdInp.fileHandleForWriting.write(input)
+        try stdInp.fileHandleForWriting.close()
+        try process.run()
+        process.waitUntilExit()
+        let errData = stdErr.fileHandleForReading.readDataToEndOfFile()
+        try stdErr.fileHandleForReading.close()
+        if !errData.isEmpty {
+            if let errText = String(data: errData, encoding: .utf8) {
+                throw NSError(domain: errText, code: 0, userInfo: nil)
+            } else {
+                throw NSError(domain: "error", code: 0, userInfo: ["data": errData])
+            }
+        }
+        let data = stdOut.fileHandleForReading.readDataToEndOfFile()
+        try stdOut.fileHandleForReading.close()
+        return data
+    }
+    func getSha256Hex(input: Data) throws -> String {
+        let data = try getSha256Data(input: input)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "unexpected output from shasum command", code: 0, userInfo: nil)
+        }
+        return text
+    }
+    func _testSha256Random(index: Int) throws -> XCTestExpectation {
+        let size = Int.random(in: 0..<65536)
+        let exp = XCTestExpectation(description: "testRandom\(index)")
+        DispatchQueue.global(qos: .background).async {
+            let bytes: [UInt8] = (0..<size).map { _ -> UInt8 in
+                return UInt8.random(in: 0..<255)
+            }
+            let source = Data(bytes)
+            let hash = source.sha256
+            NSLog("test random sha 256 #\(index) with \(size) bytes")
+            do {
+                let wanted = try self.getSha256Hex(input: source)
+                XCTAssertTrue(wanted.hasPrefix(hash.hex))
+            } catch {
+                XCTFail("random test #\(index) with \(size) bytes failed: \(error)")
+            }
+            exp.fulfill()
+        }
+        return exp
+    }
+    func _testSha256(text: String) throws {
         let source = try XCTUnwrap(text.data(using: .ascii))
         let hash = source.sha256
-        XCTAssertEqual(hash.hex, wanted)
+        let wanted = try getSha256Hex(input: source)
+        XCTAssertTrue(wanted.hasPrefix(hash.hex))
     }
     func testSha256() throws {
-        try _testSha256(text: "hello\n", wanted: "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03")
-        try _testSha256(text: "Hello, world!\n", wanted: "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5")
+        try _testSha256(text: "hello\n")
+        try _testSha256(text: "Hello, world!\n")
+        let expectations = (0..<10).compactMap { try? self._testSha256Random(index: $0) }
+        wait(for: expectations, timeout: 30)
     }
     func testRotateRight() throws {
         let x = UInt32(0x12345678)
