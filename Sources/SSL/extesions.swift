@@ -87,12 +87,4 @@ public extension Data {
     var sha256: Data {
         return Data(SHA256(source: self).hash)
     }
-    func chunks(of stride: Int) -> [[UInt8]] {
-        let size = count / stride
-        return (0..<size).map { k -> [UInt8] in
-            let i = k * stride
-            let j = i + stride
-            return self[i..<j].map { $0 }
-        }
-    }
 }

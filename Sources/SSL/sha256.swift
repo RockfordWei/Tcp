@@ -37,14 +37,17 @@ public struct SHA256 {
         let padding = [UInt8](repeating: 0, count: tailSize)
         message.append(contentsOf: padding)
         message.append(contentsOf: length.bytesInHighEndFirstOrder)
-        let blocks = message.chunks(of: chunkSize)
         
         var H: [UInt32] = [
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
         ]
 
-        for messageBlock in blocks {
+        let blocks = message.count / chunkSize
+        for index in 0..<blocks {
+            let start = index * chunkSize
+            let end = start + chunkSize
+            let messageBlock = Data(message[start..<end])
             var messageSchedule: [[UInt8]] = (0..<chunkSize).map { _ in
                 return [UInt8]()
             }
