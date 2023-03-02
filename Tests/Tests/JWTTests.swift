@@ -1,8 +1,15 @@
+//
+//  JWTTests.swift
+//
+//
+//  Created by Rocky Wei on 2023-03-01.
+//
+
 import Foundation
-@testable import SSL
+@testable import JWT
 import XCTest
 
-final class SSLTests: XCTestCase {
+final class JWTTests: XCTestCase {
     func getSha256Data(input: Data) throws -> Data {
         let process = Process()
         let stdInp = Pipe()
@@ -105,6 +112,23 @@ final class SSLTests: XCTestCase {
         let hmac = HMAC.digestHex(message: "hello\n", by: "abcd1234")
         XCTAssertEqual(hmac, "e6f2cd5247ea78055ad444edd43d425a8a22c533b1258af89ba004e3d1801d65")
     }
+    func testJWT() throws {
+        let secret = "abcd1234"
+        let claim = JWTExamplePayload(email: "guest@nowhere.unknown", issuer: "authority", timestamp: Date())
+        let token = try JWT.encode(claims: claim, secret: secret)
+        let parts = token.split(separator: ".")
+        XCTAssertEqual(parts.count, 3)
+        NSLog("JWT token: \(token)")
+        let payload: JWTExamplePayload = try JWT.decode(token: token, secret: secret)
+        XCTAssertEqual(payload, claim)
+        let compromised = [String(parts[0]), String(parts[1]), "1234abcd"].joined(separator: ".")
+        do {
+            let attemp: JWTExamplePayload = try JWT.decode(token: compromised, secret: secret)
+            XCTFail("token is compromised: \(attemp)")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "signature is not matched")
+        }
+    }
     static var allTests = [
         ("testRotateRight", testRotateRight),
         ("testChoose", testChoose),
@@ -113,6 +137,20 @@ final class SSLTests: XCTestCase {
         ("testSigma0", testSigma0),
         ("testSigma1", testSigma1),
         ("testGamma0", testGamma0),
-        ("testGamma1", testGamma1)
+        ("testGamma1", testGamma1),
+        ("testHMAC", testHMAC),
+        ("testJWT", testJWT)
     ]
+}
+
+struct JWTExamplePayload: Codable {
+    let email: String
+    let issuer: String
+    let timestamp: Date
+}
+
+extension JWTExamplePayload: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        return lhs.email == rhs.email && lhs.issuer == rhs.issuer && lhs.timestamp == rhs.timestamp
+    }
 }

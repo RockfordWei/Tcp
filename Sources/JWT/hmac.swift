@@ -34,4 +34,9 @@ public struct HMAC {
         let keyData = key.data(using: .utf8) ?? Data()
         return digest(source: source, by: keyData).hex
     }
+    public static func digestBase64(message: String, by key: String) -> String {
+        let source = message.data(using: .utf8) ?? Data()
+        let keyData = key.data(using: .utf8) ?? Data()
+        return digest(source: source, by: keyData).base64EncodedString()
+    }
 }
