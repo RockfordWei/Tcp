@@ -1,12 +1,21 @@
+//
+//  TcpSocket.swift
+//
+//
+//  Created by Rocky Wei on 2023-02-08.
+//
+
 #if os(Linux)
 import Glibc
 #else
 import Darwin
 #endif
 import Foundation
+
 public protocol TcpSocketDelegate: AnyObject {
     func onDataArrival(tcpSocket: TcpSocket)
 }
+
 open class TcpSocket {
     internal let _socket: Int32
     public enum ShutdownMethod {
@@ -94,6 +103,7 @@ open class TcpSocket {
         #endif
     }
 }
+
 public extension TcpSocket {
     static func withAddress<Result>(ipAddress: String = "0.0.0.0", port: UInt16, perform operation: @escaping (UnsafePointer<sockaddr>, socklen_t) -> Result) -> Result {
         var host = sockaddr_in()
@@ -108,6 +118,7 @@ public extension TcpSocket {
         }
     }
 }
+
 public extension TcpSocket {
     func bind(ipAddress: String = "0.0.0.0", port: UInt16) throws {
         self._ip = ipAddress
@@ -143,6 +154,7 @@ public extension TcpSocket {
         throw Exception.fail(reason: reason)
     }
 }
+
 public extension TcpSocket {
     func connect(to ipAddress: String, with port: UInt16) throws {
         let result = Self.withAddress(ipAddress: ipAddress, port: port) { pointer, size -> Int32 in
@@ -179,6 +191,7 @@ public extension TcpSocket {
         throw Exception.fail(reason: reason)
     }
 }
+
 public extension TcpSocket {
     func send(data: Data) throws {
         let result = data.withUnsafeBytes { buffer -> Int in
@@ -221,6 +234,7 @@ public extension TcpSocket {
         try send(data: data)
     }
 }
+
 public extension TcpSocket {
     func recv(peekOnly: Bool = false, bufferSize: Int = 16384) throws -> Data {
         var data = Data(repeating: 0, count: bufferSize)
@@ -253,6 +267,7 @@ public extension TcpSocket {
         throw Exception.fail(reason: reason)
     }
 }
+
 public extension TcpSocket {
     enum Exception: Error {
         case fault(reason: String, number: Int)
@@ -261,6 +276,7 @@ public extension TcpSocket {
         }
     }
 }
+
 extension TcpSocket: Hashable {
     public static func == (lhs: TcpSocket, rhs: TcpSocket) -> Bool {
         return lhs.socketFD == rhs.socketFD
@@ -269,6 +285,7 @@ extension TcpSocket: Hashable {
         hasher.combine(socketFD)
     }
 }
+
 extension TcpSocket: CustomStringConvertible {
     public var description: String {
         return "socket(\(socketFD)) -> \(ip):\(port)"
