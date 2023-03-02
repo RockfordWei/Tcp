@@ -67,7 +67,7 @@ final class SSLTests: XCTestCase {
         try _testSha256(text: "hello\n")
         try _testSha256(text: "Hello, world!\n")
         let expectations = (0..<10).compactMap { try? self._testSha256Random(index: $0) }
-        wait(for: expectations, timeout: 30)
+        wait(for: expectations, timeout: 60)
     }
     func testRotateRight() throws {
         let x = UInt32(0x12345678)

@@ -26,13 +26,18 @@ public struct SHA256 {
         let length = UInt64(message.count * 8)
         message.append(0x80)
         let chunkSize = 64
-        while (message.count * 8 + chunkSize) % 512 != 0 {
-            message.append(0)
+        var tailSize = chunkSize - 8
+        let remain = message.count % chunkSize
+        if remain != tailSize {
+            tailSize -= remain
+            if tailSize < 0 {
+                tailSize += chunkSize
+            }
         }
-        let padding = length.bytesInHighEndFirstOrder
+        let padding = [UInt8](repeating: 0, count: tailSize)
         message.append(contentsOf: padding)
-        let bytes: [UInt8] = message.map { $0 }
-        let blocks = bytes.chunks(of: chunkSize)
+        message.append(contentsOf: length.bytesInHighEndFirstOrder)
+        let blocks = message.chunks(of: chunkSize)
         
         var H: [UInt32] = [
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -40,7 +45,9 @@ public struct SHA256 {
         ]
 
         for messageBlock in blocks {
-            var messageSchedule: [[UInt8]] = []
+            var messageSchedule: [[UInt8]] = (0..<chunkSize).map { _ in
+                return [UInt8]()
+            }
             for t in 0..<chunkSize {
                 let schedule: [UInt8]
                 if t < 16 {
@@ -55,7 +62,7 @@ public struct SHA256 {
                     let word = term1 &+ term2 &+ term3 &+ term4
                     schedule = UInt32(word).bytesInHighEndFirstOrder
                 }
-                messageSchedule.append(schedule)
+                messageSchedule[t] = schedule
             }
             
             var a = H[0]

@@ -71,22 +71,6 @@ public extension UInt64 {
     }
 }
 
-public extension Array {
-    func chunks(of stride: Int) -> [Self] {
-        var array = [Self]()
-        var i = 0
-        var j = 0
-        repeat {
-            j = i + stride
-            if j > count { j = count }
-            let chunk = Self(self[i..<j])
-            array.append(chunk)
-            i = j
-        } while i < count
-        return array
-    }
-}
-
 public extension Array where Element == UInt8 {
     func unpack(from offset: Int = 0) -> UInt32 {
         return UInt32.unpack(from: self, offset: offset)
@@ -102,5 +86,13 @@ public extension Data {
     }
     var sha256: Data {
         return Data(SHA256(source: self).hash)
+    }
+    func chunks(of stride: Int) -> [[UInt8]] {
+        let size = count / stride
+        return (0..<size).map { k -> [UInt8] in
+            let i = k * stride
+            let j = i + stride
+            return self[i..<j].map { $0 }
+        }
     }
 }

@@ -12,7 +12,6 @@ let package = Package(
     targets: [
         .target(name: "SSL"),
         .target(name: "TcpSocket"),
-        .testTarget(name: "SSLTests", dependencies: ["SSL"]),
-        .testTarget(name: "TcpSocketTests", dependencies: ["TcpSocket"])
+        .testTarget(name: "Tests", dependencies: ["SSL", "TcpSocket"])
     ]
 )

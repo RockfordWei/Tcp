@@ -1,8 +1,6 @@
 import XCTest
-import SSLTests
-import TcpSocketTests
+import Tests
 
 var tests = [XCTestCaseEntry]()
-tests += SSLTests.allTests()
-tests += TcpSocketTests.allTests()
+tests += Tests.allTests()
 XCTMain(tests)
