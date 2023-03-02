@@ -101,6 +101,10 @@ final class SSLTests: XCTestCase {
         let x: UInt32 = 0x12345678
         XCTAssertEqual(UInt32(0x3561abda), x.gamma1)
     }
+    func testHMAC() throws {
+        let hmac = HMAC.digestHex(message: "hello\n", by: "abcd1234")
+        XCTAssertEqual(hmac, "e6f2cd5247ea78055ad444edd43d425a8a22c533b1258af89ba004e3d1801d65")
+    }
     static var allTests = [
         ("testRotateRight", testRotateRight),
         ("testChoose", testChoose),
@@ -109,6 +113,6 @@ final class SSLTests: XCTestCase {
         ("testSigma0", testSigma0),
         ("testSigma1", testSigma1),
         ("testGamma0", testGamma0),
-        ("testGamma1", testGamma1),
+        ("testGamma1", testGamma1)
     ]
 }
