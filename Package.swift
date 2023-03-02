@@ -6,12 +6,13 @@ import PackageDescription
 let package = Package(
     name: "TcpSocket",
     products: [
-        .library(name: "TcpSocket", targets: ["TcpSocket"]),
-        .executable(name: "TcpServer", targets: ["TcpServer"])
+        .library(name: "SSL", targets: ["SSL"]),
+        .library(name: "TcpSocket", targets: ["TcpSocket"])
     ],
     targets: [
+        .target(name: "SSL"),
         .target(name: "TcpSocket"),
-        .target(name: "TcpServer", dependencies: ["TcpSocket"]),
+        .testTarget(name: "SSLTests", dependencies: ["SSL"]),
         .testTarget(name: "TcpSocketTests", dependencies: ["TcpSocket"])
     ]
 )
