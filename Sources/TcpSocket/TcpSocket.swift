@@ -233,6 +233,43 @@ public extension TcpSocket {
         }
         try send(data: data)
     }
+    func send(path: String, size: Int) throws {
+        guard let file = fopen(path, "rb") else {
+            throw Exception.fail(reason: "unable to open file at \(path)")
+        }
+        let fd = fileno(file)
+        defer {
+            fclose(file)
+        }
+        #if os(Linux)
+            let result = Int32(sendfile(self._socket, fd, nil, size))
+        #else
+            let offset = off_t(0)
+            var remain = off_t(size)
+            let result = sendfile(fd, self._socket, offset, &remain, nil, 0)
+        #endif
+        guard result == -1 else {
+            return
+        }
+        let reason: String
+        switch result {
+        case EAGAIN: reason = "The socket is marked for non-blocking I/O and not all data was sent due to the socket buffer being full.  If specified, the number of bytes successfully sent will be returned in *len."
+        case EBADF: reason = "The fd argument is not a valid file descriptor."
+        case ENOTSUP: reason = "The fd argument does not refer to a regular file."
+        case EBADF: reason = "The s argument is not a valid socket descriptor."
+        case ENOTSOCK: reason = "The s argument does not refer stream oriented socket."
+        case EFAULT: reason = "An invalid address was specified for an argument."
+        case EINTR: reason = "A signal interrupted sendfile() before it could be completed.  If specified, the number of bytes success-fully successfully fully sent will be returned in *len."
+        case EINVAL: reason = "The offset argument is negative, or the len argument is NULL, or the flags argument is not set to 0."
+        case EIO: reason = "An error occurred while reading from fd."
+        case ENOTCONN: reason = "The s argument points to an unconnected socket."
+        case ENOTSOCK: reason = "The s argument is not a socket."
+        case EOPNOTSUPP: reason = "The file system for descriptor fd does not support sendfile()."
+        case EPIPE: reason = "The socket peer has closed the connection."
+        default: reason = "unable to send file"
+        }
+        throw Exception.fail(reason: reason)
+    }
 }
 
 public extension TcpSocket {

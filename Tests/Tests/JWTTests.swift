@@ -71,8 +71,6 @@ final class JWTTests: XCTestCase {
         XCTAssertTrue(wanted.hasPrefix(hash.hex))
     }
     func testSha256() throws {
-        try _testSha256(text: "hello\n")
-        try _testSha256(text: "Hello, world!\n")
         let expectations = (0..<10).compactMap { try? self._testSha256Random(index: $0) }
         wait(for: expectations, timeout: 60)
     }

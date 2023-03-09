@@ -11,9 +11,24 @@ open class HttpResponse {
     internal let version = "HTTP/1.0"
     public var headers: [String: String] = [:]
     internal let body: Data
+    public let contentLength: Int
     internal var code = 200
     public init(raw: Data) {
         body = raw
+        contentLength = raw.count
+    }
+    public init(path: String) {
+        headers["Content-Type"] = path.sniffMIME()
+        do {
+            contentLength = try FileManager.default.size(of: path)
+            body = Data()
+        } catch {
+            let nsError = error as NSError
+            let errors = nsError.domain + "\n" + nsError.userInfo.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
+            body = errors.data(using: .utf8) ?? Data()
+            contentLength = body.count
+            code = nsError.code
+        }
     }
     public convenience init(content: String? = nil) {
         let data = content?.data(using: .utf8) ?? Data()
@@ -25,7 +40,7 @@ open class HttpResponse {
     }
     public func encode() throws -> Data {
         headers["date"] = "\(Date())"
-        headers["content-length"] = "\(body.count)"
+        headers["content-length"] = "\(contentLength)"
         let content = (["\(version) \(code)"] + headers.map { "\($0.key): \($0.value)" })
             .joined(separator: "\r\n") + "\r\n\r\n"
         guard let payload = content.data(using: .utf8) else {
@@ -242,12 +257,10 @@ public extension String {
     var urlDecoded: String {
         return removingPercentEncoding ?? self
     }
-}
 
-public extension URL {
     func sniffMIME() -> String {
         let defaultMime = "application/octet-stream"
-        guard let suffixSubstring = lastPathComponent.split(separator: ".").last else {
+        guard let suffixSubstring = split(separator: ".").last else {
             return defaultMime
         }
         let suffix = String(suffixSubstring).lowercased()
@@ -401,5 +414,26 @@ public extension URL {
             mime = defaultMime
         }
         return mime
+    }
+}
+
+public extension URL {
+    func sniffMIME() -> String {
+        return lastPathComponent.sniffMIME()
+    }
+}
+
+public extension FileManager {
+    func size(of path: String) throws -> Int {
+        guard let file = fopen(path, "rb") else {
+            throw NSError(domain: "File Not Found", code: 404, userInfo: ["path": path])
+        }
+        defer {
+            fclose(file)
+        }
+        guard -1 != fseek(file, 0, SEEK_END) else {
+            throw NSError(domain: "Unauthorized", code: 401, userInfo: ["path": path, "size": "unknown"])
+        }
+        return ftell(file)
     }
 }

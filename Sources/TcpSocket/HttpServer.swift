@@ -60,24 +60,25 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
             return
         }
         var responseData: Data?
+        var responseFile: String?
+        var responseSize: Int?
         do {
             if let route = _routes.first(where: { request.method == $0.method && request.uri.raw.hasPrefix($0.api) }) {
                 let resp = try route.handler(request)
                 responseData = try resp?.encode()
+                responseFile = nil
+                responseSize = nil
             } else if let localPath = self.webroot,
-                      request.method == .GET,
-                      let localResourceUrl = URL(string: "file://\(localPath)\(request.uri.raw)") {
-                let response: HttpResponse
-                if let fileContent = try? Data(contentsOf: localResourceUrl) {
-                    response = HttpResponse(raw: fileContent)
-                    response.headers["Content-Type"] = localResourceUrl.sniffMIME()
-                } else {
-                    response = HttpResponse(content: "Not Found")
-                    response.code = 404
-                }
+                      request.method == .GET {
+                let path = "\(localPath)\(request.uri.raw)"
+                let response = HttpResponse(path: path)
                 responseData = try? response.encode()
+                responseFile = response.contentLength > 0 ? path : nil
+                responseSize = response.contentLength
             } else {
                 responseData = nil
+                responseFile = nil
+                responseSize = nil
             }
         } catch {
             let nserror = error as NSError
@@ -87,6 +88,9 @@ public class HttpServer: TcpSocket, TcpSocketDelegate {
         }
         if let data = responseData {
             try? tcpSocket.send(data: data)
+        }
+        if let path = responseFile, let size = responseSize {
+            try? tcpSocket.send(path: path, size: size)
         }
         tcpSocket.shutdown()
         tcpSocket.close()
