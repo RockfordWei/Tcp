@@ -36,7 +36,7 @@ public struct SHA256 {
         }
         let padding = [UInt8](repeating: 0, count: tailSize)
         message.append(contentsOf: padding)
-        message.append(contentsOf: length.bytesInHighEndFirstOrder)
+        message.append(contentsOf: length.bigEndianBytes)
         
         var H: [UInt32] = [
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -63,7 +63,7 @@ public struct SHA256 {
                     let term3 = messageSchedule[t - 15].unpack().sigma0
                     let term4 = messageSchedule[t - 16].unpack()
                     let word = term1 &+ term2 &+ term3 &+ term4
-                    schedule = UInt32(word).bytesInHighEndFirstOrder
+                    schedule = UInt32(word).bigEndianBytes
                 }
                 messageSchedule[t] = schedule
             }
@@ -99,6 +99,6 @@ public struct SHA256 {
             H[6] = H[6] &+ g
             H[7] = H[7] &+ h
         }
-        hash = H.flatMap { $0.bytesInHighEndFirstOrder }
+        hash = H.flatMap { $0.bigEndianBytes }
     }
 }

@@ -7,38 +7,27 @@
 
 import Foundation
 
-// swiftlint:disable operator_usage_whitespace
 public extension UInt32 {
-    static func unpack(from bytesInHighEndFirstOrder: [UInt8], offset: Int) -> Self {
-        let a = Self(bytesInHighEndFirstOrder[offset    ]) << 24
-        let b = Self(bytesInHighEndFirstOrder[offset + 1]) << 16
-        let c = Self(bytesInHighEndFirstOrder[offset + 2]) << 8
-        let d = Self(bytesInHighEndFirstOrder[offset + 3])
-        return a | b | c | d
+    static func unpack(from bigEndianBytes: [UInt8], offset: Int) -> Self {
+        return bigEndianBytes[offset..<offset + 4]
+            .enumerated()
+            .map { Self($0.element) << (24 - 8 * $0.offset) }
+            .reduce(0) { $0 | $1 }
     }
     var sigma0: Self {
-        let x = rotateRight(by: 7)
-        let y = rotateRight(by: 18)
-        let z = (self >> 3)
-        return x ^ y ^ z
+        return xorRightShits(7, 18) ^ (self >> 3)
     }
     var sigma1: Self {
-        let x = rotateRight(by: 17)
-        let y = rotateRight(by: 19)
-        let z = self >> 10
-        return x ^ y ^ z
+        return xorRightShits(17, 19) ^ (self >> 10)
     }
     var gamma0: Self {
-        let x = rotateRight(by: 2)
-        let y = rotateRight(by: 13)
-        let z = rotateRight(by: 22)
-        return x ^ y ^ z
+        return xorRightShits(2, 13, 22)
     }
     var gamma1: Self {
-        let x = rotateRight(by: 6)
-        let y = rotateRight(by: 11)
-        let z = rotateRight(by: 25)
-        return x ^ y ^ z
+        return xorRightShits(6, 11, 25)
+    }
+    internal func xorRightShits(_ shifts: Int ...) -> Self {
+        return shifts.map { rotateRight(by: $0) }.reduce(0) { $0 ^ $1 }
     }
     func rotateRight(by shift: Int) -> Self {
         return (self >> shift) | (self << (32 - shift))
@@ -49,27 +38,32 @@ public extension UInt32 {
     static func major(x: Self, y: Self, z: Self) -> Self {
         return (x & y) ^ (x & z) ^ (y & z)
     }
-    var bytesInHighEndFirstOrder: [UInt8] {
-        let a = UInt8((self & 0xFF000000) >> 24)
-        let b = UInt8((self & 0x00FF0000) >> 16)
-        let c = UInt8((self & 0x0000FF00) >>  8)
-        let d = UInt8( self & 0x000000FF)
-        return [a, b, c, d]
+    var bigEndianBytes: [UInt8] {
+        return (0..<4).map { UInt8((self >> (24 - 8 * $0)) & 0xFF) }
     }
 }
 
-// swiftlint:disable operator_usage_whitespace
 public extension UInt64 {
-    var bytesInHighEndFirstOrder: [UInt8] {
-        let a = UInt8((self & 0xFF00000000000000) >> 56)
-        let b = UInt8((self & 0x00FF000000000000) >> 48)
-        let c = UInt8((self & 0x0000FF0000000000) >> 40)
-        let d = UInt8((self & 0x000000FF00000000) >> 32)
-        let e = UInt8((self & 0x00000000FF000000) >> 24)
-        let f = UInt8((self & 0x0000000000FF0000) >> 16)
-        let g = UInt8((self & 0x000000000000FF00) >>  8)
-        let h = UInt8( self & 0x00000000000000FF)
-        return [a, b, c, d, e, f, g, h]
+    var bigEndianBytes: [UInt8] {
+        return (0..<8).map { UInt8((self >> (56 - 8 * $0)) & 0xFF) }
+    }
+    func rotateRight(by shift: Int) -> Self {
+        return (self >> shift) | (self << (64 - shift))
+    }
+    internal func xorRightShits(_ shifts: Int ...) -> Self {
+        return shifts.map { rotateRight(by: $0) }.reduce(0) { $0 ^ $1 }
+    }
+    var gamma0: Self {
+        return xorRightShits(28, 34, 29)
+    }
+    var gamma1: Self {
+        return xorRightShits(14, 18, 41)
+    }
+    var sigma0: Self {
+        return xorRightShits(1, 8) ^ (self >> 7)
+    }
+    var sigma1: Self {
+        return xorRightShits(19, 61) ^ (self >> 6)
     }
 }
 
