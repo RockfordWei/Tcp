@@ -21,29 +21,42 @@ public struct SHA256 {
     ]
 
     public let hash: [UInt8]
-    public init(streamReader: Int32) {
+    public init(source: Data) {
+        var message = source
+        let length = UInt64(message.count * 8)
+        message.append(0x80)
         let chunkSize = 64
+        var tailSize = chunkSize - 8
+        let remain = message.count % chunkSize
+        if remain != tailSize {
+            tailSize -= remain
+            if tailSize < 0 {
+                tailSize += chunkSize
+            }
+        }
+        let padding = [UInt8](repeating: 0, count: tailSize)
+        message.append(contentsOf: padding)
+        message.append(contentsOf: length.bigEndianBytes)
+        
         var H: [UInt32] = [
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
         ]
-        while streamReader > 0 {
-            var block = [UInt8](repeating: 0, count: chunkSize)
+
+        let blocks = message.count / chunkSize
+        for index in 0..<blocks {
+            let start = index * chunkSize
+            let end = start + chunkSize
+            let messageBlock = Data(message[start..<end])
             var messageSchedule: [[UInt8]] = (0..<chunkSize).map { _ in
                 return [UInt8]()
             }
-            #if os(Linux)
-                let result = SwiftGlibc.read(streamReader, &block, chunkSize)
-            #else
-                let result = Darwin.read(streamReader, &block, chunkSize)
-            #endif
-            guard result == chunkSize else { break }
             for t in 0..<chunkSize {
                 let schedule: [UInt8]
                 if t < 16 {
                     let i = t * 4
                     let j = i + 4
-                    schedule = [UInt8](block[i..<j])
+                    schedule = [UInt8](messageBlock[i..<j])
                 } else {
                     let term1 = messageSchedule[t - 2].unpack().sigma1
                     let term2 = messageSchedule[t - 7].unpack()
@@ -54,6 +67,7 @@ public struct SHA256 {
                 }
                 messageSchedule[t] = schedule
             }
+            
             var a = H[0]
             var b = H[1]
             var c = H[2]
@@ -86,47 +100,5 @@ public struct SHA256 {
             H[7] = H[7] &+ h
         }
         hash = H.flatMap { $0.bigEndianBytes }
-    }
-    public init(source: Data) {
-        var stream: [Int32] = [0, 0]
-        #if os(Linux)
-            SwiftGlibc.pipe(&stream)
-            _ = source.withUnsafeBytes { pointer in
-                return SwiftGlibc.write(stream[1], pointer.baseAddress, source.count)
-            }
-        #else
-            Darwin.pipe(&stream)
-            _ = source.withUnsafeBytes { pointer in
-                return Darwin.write(stream[1], pointer.baseAddress, source.count)
-            }
-        #endif
-        
-        let length = UInt64(source.count * 8)
-        let chunkSize = 64
-        var tailSize = chunkSize - 8
-        let remain = (source.count + 1) % chunkSize
-        if remain != tailSize {
-            tailSize -= remain
-            if tailSize < 0 {
-                tailSize += chunkSize
-            }
-        }
-        let padding = [UInt8(0x80)] + [UInt8](repeating: 0, count: tailSize) + length.bigEndianBytes
-        _ = padding.withUnsafeBytes { pointer -> Int in
-            #if os(Linux)
-                return SwiftGlibc.write(stream[1], pointer.baseAddress, padding.count)
-            #else
-                return Darwin.write(stream[1], pointer.baseAddress, padding.count)
-            #endif
-        }
-        #if os(Linux)
-            SwiftGlibc.close(stream[1])
-            self.init(streamReader: stream[0])
-            SwiftGlibc.close(stream[0])
-        #else
-            Darwin.close(stream[1])
-            self.init(streamReader: stream[0])
-            Darwin.close(stream[0])
-        #endif
     }
 }
