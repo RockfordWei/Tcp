@@ -53,11 +53,8 @@ final class JWTTests: XCTestCase {
                 return UInt8.random(in: 0..<255)
             }
             let source = Data(bytes)
-            let hash = source.sha256
-            NSLog("test random sha 256 #\(index) with \(size) bytes")
             do {
-                let wanted = try self.getSha256Hex(input: source)
-                XCTAssertTrue(wanted.hasPrefix(hash.hex))
+                try self._testSha256(source: source)
             } catch {
                 XCTFail("random test #\(index) with \(size) bytes failed: \(error)")
             }
@@ -65,11 +62,35 @@ final class JWTTests: XCTestCase {
         }
         return exp
     }
+    func _testSha256(source: Data) throws {
+        let hash = source.sha256.hex
+        let wanted = try getSha256Hex(input: source)
+        var stream: [Int32] = [0, 0]
+        let streamed = source.withUnsafeBytes { pointer -> String in
+            #if os(Linux)
+            Glibc.pipe(&stream)
+            Glibc.write(stream[1], pointer.baseAddress, source.count)
+            Glibc.close(stream[1])
+            #else
+            Darwin.pipe(&stream)
+            Darwin.write(stream[1], pointer.baseAddress, source.count)
+            Darwin.close(stream[1])
+            #endif
+            let sha = SHA256(streamReaderFileNumber: stream[0])
+            return sha.hash.hex()
+        }
+        NSLog("generated: \(hash)")
+        NSLog("expecting: \(wanted)")
+        NSLog("streaming: \(streamed)")
+        XCTAssertTrue(wanted.hasPrefix(hash))
+        XCTAssertEqual(hash, streamed)
+    }
     func _testSha256(text: String) throws {
         let source = try XCTUnwrap(text.data(using: .ascii))
-        let hash = source.sha256
-        let wanted = try getSha256Hex(input: source)
-        XCTAssertTrue(wanted.hasPrefix(hash.hex))
+        try _testSha256(source: source)
+    }
+    func testSha256FixedCase() throws {
+        try _testSha256(text: "hello\n")
     }
     func testSha256() throws {
         let expectations = (0..<10).compactMap { try? self._testSha256Random(index: $0) }

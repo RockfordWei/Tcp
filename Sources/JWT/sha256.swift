@@ -1,7 +1,93 @@
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 import Foundation
 
 public struct SHA256 {
-    private static let K: [UInt32] = [
+    internal static let ending: [UInt8] = [0x80]
+    public let hash: [UInt8]
+    public init(source: Data) {
+        var message = source
+        let length = UInt64(message.count * 8)
+        message.append(contentsOf: Self.ending)
+        let chunkSize = SHA256Round.chunkSize
+        var tailSize = chunkSize - 8
+        let remain = message.count % chunkSize
+        if remain != tailSize {
+            tailSize -= remain
+            if tailSize < 0 {
+                tailSize += chunkSize
+            }
+        }
+        let padding = [UInt8](repeating: 0, count: tailSize)
+        message.append(contentsOf: padding)
+        message.append(contentsOf: length.bigEndianBytes)
+        
+        let blocks = message.count / chunkSize
+        let round = SHA256Round()
+        for index in 0..<blocks {
+            let start = index * chunkSize
+            let end = start + chunkSize
+            let block = Data(message[start..<end])
+            round.calculate(index: index, block: block)
+        }
+        hash = round.hashValue
+    }
+    public init(streamReaderFileNumber: Int32) {
+        var totalBytes = 0
+        var index = 0
+        var inProgress = true
+        let chunkSize = SHA256Round.chunkSize
+        let round = SHA256Round()
+        var lastBlock: [UInt8]?
+        while inProgress {
+            var block = [UInt8](repeating: 0, count: chunkSize)
+            let size = block.withUnsafeMutableBytes { pointer -> Int in
+                #if os(Linux)
+                return Glibc.read(streamReaderFileNumber, pointer.baseAddress, chunkSize)
+                #else
+                return Darwin.read(streamReaderFileNumber, pointer.baseAddress, chunkSize)
+                #endif
+            }
+            if size >= 0 {
+                totalBytes += size
+            }
+            if size < 1 {
+                let length = UInt64(totalBytes * 8)
+                block = Self.ending + [UInt8](repeating: 0, count: chunkSize - 9) + length.bigEndianBytes
+                inProgress = false
+            } else if size < (chunkSize - 9) {
+                let length = UInt64(totalBytes * 8)
+                block = [UInt8](block[0..<size]) + Self.ending + [UInt8](repeating: 0, count: chunkSize - size - 9) + length.bigEndianBytes
+                inProgress = false
+            } else if size < chunkSize {
+                let length = UInt64(totalBytes * 8)
+                block[size] = Self.ending[0]
+                lastBlock = [UInt8](repeating: 0, count: chunkSize - 8) + length.bigEndianBytes
+                inProgress = false
+            } else {
+                inProgress = true
+            }
+            round.calculate(index: index, block: Data(block))
+            index += 1
+        }
+        if let last = lastBlock {
+            round.calculate(index: index, block: Data(last))
+        }
+        #if os(Linux)
+        Glibc.close(streamReaderFileNumber)
+        #else
+        Darwin.close(streamReaderFileNumber)
+        #endif
+        hash = round.hashValue
+    }
+}
+
+internal class SHA256Round {
+    static let chunkSize = 64
+    static let K: [UInt32] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
         0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
         0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -19,86 +105,64 @@ public struct SHA256 {
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
         0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
     ]
-
-    public let hash: [UInt8]
-    public init(source: Data) {
-        var message = source
-        let length = UInt64(message.count * 8)
-        message.append(0x80)
-        let chunkSize = 64
-        var tailSize = chunkSize - 8
-        let remain = message.count % chunkSize
-        if remain != tailSize {
-            tailSize -= remain
-            if tailSize < 0 {
-                tailSize += chunkSize
-            }
+    private var H: [UInt32] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ]
+    public var hashValue: [UInt8] {
+        return H.flatMap { $0.bigEndianBytes }
+    }
+    public func calculate(index: Int, block: Data) {
+        assert(block.count == Self.chunkSize)
+        var messageSchedule: [[UInt8]] = (0..<Self.chunkSize).map { _ in
+            return [UInt8]()
         }
-        let padding = [UInt8](repeating: 0, count: tailSize)
-        message.append(contentsOf: padding)
-        message.append(contentsOf: length.bigEndianBytes)
+        for t in 0..<Self.chunkSize {
+            let schedule: [UInt8]
+            if t < 16 {
+                let i = t * 4
+                let j = i + 4
+                schedule = [UInt8](block[i..<j])
+            } else {
+                let term1 = messageSchedule[t - 2].unpack().sigma1
+                let term2 = messageSchedule[t - 7].unpack()
+                let term3 = messageSchedule[t - 15].unpack().sigma0
+                let term4 = messageSchedule[t - 16].unpack()
+                let word = term1 &+ term2 &+ term3 &+ term4
+                schedule = UInt32(word).bigEndianBytes
+            }
+            messageSchedule[t] = schedule
+        }
         
-        var H: [UInt32] = [
-            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-            0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-        ]
+        var a = H[0]
+        var b = H[1]
+        var c = H[2]
+        var d = H[3]
+        var e = H[4]
+        var f = H[5]
+        var g = H[6]
+        var h = H[7]
 
-        let blocks = message.count / chunkSize
-        for index in 0..<blocks {
-            let start = index * chunkSize
-            let end = start + chunkSize
-            let messageBlock = Data(message[start..<end])
-            var messageSchedule: [[UInt8]] = (0..<chunkSize).map { _ in
-                return [UInt8]()
-            }
-            for t in 0..<chunkSize {
-                let schedule: [UInt8]
-                if t < 16 {
-                    let i = t * 4
-                    let j = i + 4
-                    schedule = [UInt8](messageBlock[i..<j])
-                } else {
-                    let term1 = messageSchedule[t - 2].unpack().sigma1
-                    let term2 = messageSchedule[t - 7].unpack()
-                    let term3 = messageSchedule[t - 15].unpack().sigma0
-                    let term4 = messageSchedule[t - 16].unpack()
-                    let word = term1 &+ term2 &+ term3 &+ term4
-                    schedule = UInt32(word).bigEndianBytes
-                }
-                messageSchedule[t] = schedule
-            }
+        for t in 0..<64 {
+            let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ messageSchedule[t].unpack()
+            let t2 = a.gamma0 &+ UInt32.major(x: a, y: b, z: c)
             
-            var a = H[0]
-            var b = H[1]
-            var c = H[2]
-            var d = H[3]
-            var e = H[4]
-            var f = H[5]
-            var g = H[6]
-            var h = H[7]
-
-            for t in 0..<64 {
-                let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ messageSchedule[t].unpack()
-                let t2 = a.gamma0 &+ UInt32.major(x: a, y: b, z: c)
-                
-                h = g
-                g = f
-                f = e
-                e = d &+ t1
-                d = c
-                c = b
-                b = a
-                a = t1 &+ t2
-            }
-            H[0] = H[0] &+ a
-            H[1] = H[1] &+ b
-            H[2] = H[2] &+ c
-            H[3] = H[3] &+ d
-            H[4] = H[4] &+ e
-            H[5] = H[5] &+ f
-            H[6] = H[6] &+ g
-            H[7] = H[7] &+ h
+            h = g
+            g = f
+            f = e
+            e = d &+ t1
+            d = c
+            c = b
+            b = a
+            a = t1 &+ t2
         }
-        hash = H.flatMap { $0.bigEndianBytes }
+        H[0] = H[0] &+ a
+        H[1] = H[1] &+ b
+        H[2] = H[2] &+ c
+        H[3] = H[3] &+ d
+        H[4] = H[4] &+ e
+        H[5] = H[5] &+ f
+        H[6] = H[6] &+ g
+        H[7] = H[7] &+ h
     }
 }
