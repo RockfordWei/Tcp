@@ -45,7 +45,7 @@ public extension UInt32 {
 
 public extension UInt64 {
     var gamma0: Self {
-        return xorRightShits(28, 34, 29)
+        return xorRightShits(28, 34, 39)
     }
     var gamma1: Self {
         return xorRightShits(14, 18, 41)
@@ -82,6 +82,9 @@ public extension UInt64 {
 public extension Array where Element == UInt8 {
     func unpack(from offset: Int = 0) -> UInt32 {
         return UInt32.unpack(from: self, offset: offset)
+    }
+    func unpack64(from offset: Int = 0) -> UInt64 {
+        return UInt64.unpack(from: self, offset: offset)
     }
     func hex() -> String {
         return map { String(format: "%02x", $0) }.joined()

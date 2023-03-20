@@ -54,16 +54,11 @@ public struct SHA256 {
             if size >= 0 {
                 totalBytes += size
             }
-            if size < 1 {
-                let length = UInt64(totalBytes * 8)
-                block = Self.ending + [UInt8](repeating: 0, count: chunkSize - 9) + length.bigEndianBytes
-                inProgress = false
-            } else if size < (chunkSize - 9) {
-                let length = UInt64(totalBytes * 8)
+            let length = UInt64(totalBytes * 8)
+            if size < (chunkSize - 9) {
                 block = [UInt8](block[0..<size]) + Self.ending + [UInt8](repeating: 0, count: chunkSize - size - 9) + length.bigEndianBytes
                 inProgress = false
             } else if size < chunkSize {
-                let length = UInt64(totalBytes * 8)
                 block[size] = Self.ending[0]
                 lastBlock = [UInt8](repeating: 0, count: chunkSize - 8) + length.bigEndianBytes
                 inProgress = false
