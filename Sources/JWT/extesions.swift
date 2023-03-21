@@ -35,8 +35,8 @@ public extension UInt32 {
     var bigEndianBytes: [UInt8] {
         return (0..<4).map { UInt8((self >> (24 - 8 * $0)) & 0xFF) }
     }
-    static func unpack(from bigEndianBytes: [UInt8], offset: Int) -> Self {
-        return bigEndianBytes[offset..<offset + 4]
+    static func unpack(from bigEndianData: Data, offset: Int) -> Self {
+        return bigEndianData[offset..<offset + 4]
             .enumerated()
             .map { Self($0.element) << (24 - 8 * $0.offset) }
             .reduce(0) { $0 | $1 }
@@ -71,8 +71,8 @@ public extension UInt64 {
     var bigEndianBytes: [UInt8] {
         return (0..<8).map { UInt8((self >> (56 - 8 * $0)) & 0xFF) }
     }
-    static func unpack(from bigEndianBytes: [UInt8], offset: Int) -> Self {
-        return bigEndianBytes[offset..<offset + 8]
+    static func unpack(from bigEndianData: Data, offset: Int) -> Self {
+        return bigEndianData[offset..<offset + 8]
             .enumerated()
             .map { Self($0.element) << (56 - 8 * $0.offset) }
             .reduce(0) { $0 | $1 }
@@ -80,12 +80,6 @@ public extension UInt64 {
 }
 
 public extension Array where Element == UInt8 {
-    func unpack(from offset: Int = 0) -> UInt32 {
-        return UInt32.unpack(from: self, offset: offset)
-    }
-    func unpack64(from offset: Int = 0) -> UInt64 {
-        return UInt64.unpack(from: self, offset: offset)
-    }
     func hex() -> String {
         return map { String(format: "%02x", $0) }.joined()
     }

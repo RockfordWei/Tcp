@@ -109,26 +109,13 @@ internal class SHA256Round {
     }
     func calculate(index: Int, block: Data) {
         assert(block.count == Self.chunkSize)
-        var messageSchedule: [[UInt8]] = (0..<Self.chunkSize).map { _ in
-            return [UInt8]()
+        var schedule = [UInt32](repeating: 0, count: Self.chunkSize)
+        for index in 0..<Self.chunkSize {
+            schedule[index] = index < 16
+                ? UInt32.unpack(from: block, offset: index * 4)
+                : schedule[index - 2].sigma1 &+ schedule[index - 7] &+ schedule[index - 15].sigma0 &+ schedule[index - 16]
         }
-        for t in 0..<Self.chunkSize {
-            let schedule: [UInt8]
-            if t < 16 {
-                let i = t * 4
-                let j = i + 4
-                schedule = [UInt8](block[i..<j])
-            } else {
-                let term1 = messageSchedule[t - 2].unpack().sigma1
-                let term2 = messageSchedule[t - 7].unpack()
-                let term3 = messageSchedule[t - 15].unpack().sigma0
-                let term4 = messageSchedule[t - 16].unpack()
-                let word = term1 &+ term2 &+ term3 &+ term4
-                schedule = UInt32(word).bigEndianBytes
-            }
-            messageSchedule[t] = schedule
-        }
-        
+
         var a = H[0]
         var b = H[1]
         var c = H[2]
@@ -139,7 +126,7 @@ internal class SHA256Round {
         var h = H[7]
 
         for t in 0..<64 {
-            let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ messageSchedule[t].unpack()
+            let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ schedule[t]
             let t2 = a.gamma0 &+ UInt32.major(x: a, y: b, z: c)
             
             h = g
