@@ -9,7 +9,6 @@ import Foundation
 @testable import JWT
 import XCTest
 
-// swiftlint:disable empty_xctest_method
 final class JWTTests: XCTestCase {
     func getSha256Data(input: Data) throws -> Data {
         let process = Process()

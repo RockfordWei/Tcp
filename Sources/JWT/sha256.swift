@@ -41,7 +41,7 @@ public struct SHA256 {
         var inProgress = true
         let chunkSize = SHA256Round.chunkSize
         let round = SHA256Round()
-        var lastBlock: [UInt8]?
+        var lastBlock: [UInt8] = []
         while inProgress {
             var block = [UInt8](repeating: 0, count: chunkSize)
             let size = block.withUnsafeMutableBytes { pointer -> Int in
@@ -68,8 +68,8 @@ public struct SHA256 {
             round.calculate(index: index, block: Data(block))
             index += 1
         }
-        if let last = lastBlock {
-            round.calculate(index: index, block: Data(last))
+        if lastBlock.count == chunkSize {
+            round.calculate(index: index, block: Data(lastBlock))
         }
         #if os(Linux)
         Glibc.close(streamReaderFileNumber)
@@ -104,10 +104,10 @@ internal class SHA256Round {
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
         0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
     ]
-    public var hashValue: [UInt8] {
+    var hashValue: [UInt8] {
         return H.flatMap { $0.bigEndianBytes }
     }
-    public func calculate(index: Int, block: Data) {
+    func calculate(index: Int, block: Data) {
         assert(block.count == Self.chunkSize)
         var messageSchedule: [[UInt8]] = (0..<Self.chunkSize).map { _ in
             return [UInt8]()
