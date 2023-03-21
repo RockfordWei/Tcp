@@ -12,7 +12,7 @@ import FoundationNetworking
 @testable import TcpSocket
 import XCTest
 
-// swiftlint:disable empty_xctest_method implicitly_unwrapped_optional
+// swiftlint:disable implicitly_unwrapped_optional
 final class TcpSocketTests: XCTestCase {
     var server: HttpServer! = nil
     let port: UInt16 = 8181
