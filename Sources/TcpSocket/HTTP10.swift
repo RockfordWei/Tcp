@@ -73,7 +73,7 @@ public struct HttpRequest {
             body = Data()
         }
         guard let head = String(data: headData, encoding: .utf8) else {
-            throw NSError(domain: "Bad Request", code: 400, userInfo: ["error": "unable to encode \(headData) bytes for http head"])
+            throw NSError(domain: "Bad Request", code: 400, userInfo: ["error": "unable to encode \(headData.count) bytes for http head"])
         }
         var lines = head.split(separator: "\r\n").map { String($0).trimmed }
         let uriPattern = try NSRegularExpression(pattern: "^(GET|POST|HEAD) (.*) HTTP/([0-9.]+)$", options: .caseInsensitive)
