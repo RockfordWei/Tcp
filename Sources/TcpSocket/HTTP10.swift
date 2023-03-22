@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import JWT
 
 open class HttpResponse {
     internal let version = "HTTP/1.0"
@@ -122,6 +121,9 @@ public struct HttpRequest {
     public var content: String? {
         return String(data: body, encoding: .utf8)
     }
+    public func decode<T: Decodable>(to `type`: T.Type) throws -> T {
+        return try JSONDecoder().decode(`type`, from: body)
+    }
 }
 
 public extension HttpRequest {
@@ -189,7 +191,7 @@ public struct HttpPostFile {
     public init?(multipartBlock: Data) {
         guard multipartBlock.count > 4 else {
             #if DEBUG
-            NSLog("postFile: invalid multipartBlock: \(multipartBlock.hex)")
+            NSLog("postFile: invalid multipartBlock: \(multipartBlock.count)")
             #endif
             return nil
         }

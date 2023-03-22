@@ -19,6 +19,7 @@ final class TcpSocketTests: XCTestCase {
     static let randomBytes: [UInt8] = (0..<8192).map { _ -> UInt8 in
         return UInt8.random(in: 0..<255)
     }
+    static let randomStruct = TestJsonStruct(id: Int.random(in: 1024..<2048), timestamp: Date(), payload: UUID().uuidString)
     let tmpPath = "/tmp/httptest.png"
     let routes: [HttpRoute] = [
         HttpRoute(api: "/api/v1/get", method: .GET) { request throws -> HttpResponse? in
@@ -27,6 +28,13 @@ final class TcpSocketTests: XCTestCase {
         },
         HttpRoute(api: "/api/v1/postParameters", method: .POST) { request throws -> HttpResponse? in
             XCTAssertEqual(request.postFields, ["key1": "value1?", "key2": "value2:", "key3": "value3|"])
+            return try HttpResponse(encodable: ResponseBody(error: 0))
+        },
+        HttpRoute(api: "/api/v1/postJson", method: .POST) { request throws -> HttpResponse? in
+            let post = try request.decode(to: TestJsonStruct.self)
+            XCTAssertEqual(post.id, randomStruct.id)
+            XCTAssertEqual(post.timestamp, randomStruct.timestamp)
+            XCTAssertEqual(post.payload, randomStruct.payload)
             return try HttpResponse(encodable: ResponseBody(error: 0))
         },
         HttpRoute(api: "/api/v1/postFiles", method: .POST) { request throws -> HttpResponse? in
@@ -60,12 +68,14 @@ final class TcpSocketTests: XCTestCase {
         unlink(tmpPath)
     }
     func curlData(command: String) throws -> Data {
+        let cmd = "curl -s -0 -4 \(command)"
+        NSLog("performing curl command:\n\(cmd)")
         let process = Process()
         let stdOut = Pipe()
         let stdErr = Pipe()
         process.standardOutput = stdOut
         process.standardError = stdErr
-        process.arguments = ["-c", "curl -s -0 -4 \(command)"]
+        process.arguments = ["-c", cmd]
         process.executableURL = URL(string: "file:///bin/bash")
         process.standardInput = nil
         try process.run()
@@ -110,6 +120,14 @@ final class TcpSocketTests: XCTestCase {
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
     }
+    func testPostJson() throws {
+        let urlString = "http://localhost:\(port)/api/v1/postJson"
+        let jsonData = try JSONEncoder().encode(Self.randomStruct)
+        let jsonString = try XCTUnwrap(String(data: jsonData, encoding: .utf8))
+        let jsonResponse = try curlData(command: "-X POST -H 'Content-Type: application/json' --data '\(jsonString)' '\(urlString)'")
+        let response = try JSONDecoder().decode(ResponseBody.self, from: jsonResponse)
+        XCTAssertEqual(response.error, 0)
+    }
     func testPostFiles() throws {
         let urlString = "http://localhost:\(port)/api/v1/postFiles"
         let response: ResponseBody? = try curlPostFile(files: [tmpPath, tmpPath, tmpPath], url: urlString)
@@ -128,6 +146,7 @@ final class TcpSocketTests: XCTestCase {
         ("testGet", testGet),
         ("testPostParameters", testPostParameters),
         ("testPostFiles", testPostFiles),
+        ("testPostJson", testPostJson),
         ("testStaticFile", testStaticFile)
     ]
 }
@@ -137,4 +156,9 @@ struct ResponseBody: Codable {
 struct RequestBody: Codable {
     let content: String
     let timestamp: Date
+}
+struct TestJsonStruct: Codable {
+    let id: Int
+    let timestamp: Date
+    let payload: String
 }
