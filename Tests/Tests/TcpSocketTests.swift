@@ -16,7 +16,7 @@ import XCTest
 final class TcpSocketTests: XCTestCase {
     var server: HttpServer! = nil
     let port: UInt16 = 8181
-    static let randomBytes: [UInt8] = (0..<8000).map { _ -> UInt8 in
+    static let randomBytes: [UInt8] = (0..<65536).map { _ -> UInt8 in
         return UInt8.random(in: 0..<255)
     }
     let tmpPath = "/tmp/httptest.png"

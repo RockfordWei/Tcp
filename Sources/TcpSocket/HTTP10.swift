@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import JWT
 
 open class HttpResponse {
     internal let version = "HTTP/1.0"
@@ -71,16 +72,18 @@ public struct HttpRequest {
             headData = request
             body = Data()
         }
-        let head = String(data: headData, encoding: .utf8) ?? ""
+        guard let head = String(data: headData, encoding: .utf8) else {
+            throw NSError(domain: "Bad Request", code: 400, userInfo: ["error": "unable to encode \(headData) bytes for http head"])
+        }
         var lines = head.split(separator: "\r\n").map { String($0).trimmed }
         let uriPattern = try NSRegularExpression(pattern: "^(GET|POST|HEAD) (.*) HTTP/([0-9.]+)$", options: .caseInsensitive)
         let headerPattern = try NSRegularExpression(pattern: "^([a-zA-Z\\-]+):\\s(.*)$")
         guard !lines.isEmpty else {
-            throw NSError(domain: "Bad Request", code: 400)
+            throw NSError(domain: "Bad Request", code: 400, userInfo: ["error": "unexpected header format", "headers": head])
         }
         let top = lines.removeFirst()
         guard let uriMatch = uriPattern.firstMatch(in: top, range: top.range) else {
-            throw NSError(domain: "Bad Request", code: 400)
+            throw NSError(domain: "Bad Request", code: 400, userInfo: ["error": "unexpected uri pattern", "headers": head])
         }
         let headString = head as NSString
         let methodRange = uriMatch.range(at: 1)
@@ -180,17 +183,27 @@ public struct HttpPostFile {
     let attributes: [String: String]
     let content: Data
     public init?(multipartBlock: Data) {
-        guard multipartBlock.count > 4 else { return nil }
+        guard multipartBlock.count > 4 else {
+            #if DEBUG
+            NSLog("postFile: invalid multipartBlock: \(multipartBlock.hex)")
+            #endif
+            return nil
+        }
         let block = multipartBlock.dropFirst(2).dropLast(2)
         guard let lineBreaks = "\r\n\r\n".data(using: .utf8),
               let location = block.firstRange(of: lineBreaks) else {
+            #if DEBUG
+            NSLog("postFile: failed to find line breaks for multipart data \(multipartBlock.count) bytes")
+            #endif
             return nil
         }
         let headText = (String(data: block[..<location.lowerBound], encoding: .utf8) ?? "")
             .replacingOccurrences(of: "\r\n", with: ";")
             .replacingOccurrences(of: ": ", with: "=")
         content = block[location.upperBound...]
-        print(content.count)
+        #if DEBUG
+        NSLog("postFile: received body \(content.count) bytes for header: \(headText)")
+        #endif
         let headers: [(String, String)] = headText
             .split(separator: ";")
             .compactMap { expression -> (String, String)? in
