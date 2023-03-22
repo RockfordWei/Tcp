@@ -11,27 +11,24 @@ public struct SHA256 {
     public init(source: Data) {
         var message = source
         let length = UInt64(message.count * 8)
-        message.append(contentsOf: Self.ending)
-        let chunkSize = SHA256Round.chunkSize
-        var tailSize = chunkSize - 8
-        let remain = message.count % chunkSize
+        var tailSize = SHA256Round.chunkSize - 8
+        let remain = (message.count + 1) % SHA256Round.chunkSize
         if remain != tailSize {
             tailSize -= remain
             if tailSize < 0 {
-                tailSize += chunkSize
+                tailSize += SHA256Round.chunkSize
             }
         }
-        let padding = [UInt8](repeating: 0, count: tailSize)
+        let padding = Self.ending + [UInt8](repeating: 0, count: tailSize) + length.bigEndianBytes
         message.append(contentsOf: padding)
-        message.append(contentsOf: length.bigEndianBytes)
         
-        let blocks = message.count / chunkSize
+        let blocks = message.count / SHA256Round.chunkSize
         let round = SHA256Round()
         for index in 0..<blocks {
-            let start = index * chunkSize
-            let end = start + chunkSize
+            let start = index * SHA256Round.chunkSize
+            let end = start + SHA256Round.chunkSize
             let block = Data(message[start..<end])
-            round.calculate(index: index, block: block)
+            round.calculate(block: block)
         }
         hash = round.hashValue
     }
@@ -39,37 +36,36 @@ public struct SHA256 {
         var totalBytes = 0
         var index = 0
         var inProgress = true
-        let chunkSize = SHA256Round.chunkSize
         let round = SHA256Round()
         var lastBlock: [UInt8] = []
         while inProgress {
-            var block = [UInt8](repeating: 0, count: chunkSize)
+            var block = [UInt8](repeating: 0, count: SHA256Round.chunkSize)
             let size = block.withUnsafeMutableBytes { pointer -> Int in
                 #if os(Linux)
-                return Glibc.read(streamReaderFileNumber, pointer.baseAddress, chunkSize)
+                return Glibc.read(streamReaderFileNumber, pointer.baseAddress, SHA256Round.chunkSize)
                 #else
-                return Darwin.read(streamReaderFileNumber, pointer.baseAddress, chunkSize)
+                return Darwin.read(streamReaderFileNumber, pointer.baseAddress, SHA256Round.chunkSize)
                 #endif
             }
             if size >= 0 {
                 totalBytes += size
             }
             let length = UInt64(totalBytes * 8)
-            if size < (chunkSize - 9) {
-                block = [UInt8](block[0..<size]) + Self.ending + [UInt8](repeating: 0, count: chunkSize - size - 9) + length.bigEndianBytes
+            if size < (SHA256Round.chunkSize - 9) {
+                block = [UInt8](block[0..<size]) + Self.ending + [UInt8](repeating: 0, count: SHA256Round.chunkSize - size - 9) + length.bigEndianBytes
                 inProgress = false
-            } else if size < chunkSize {
+            } else if size < SHA256Round.chunkSize {
                 block[size] = Self.ending[0]
-                lastBlock = [UInt8](repeating: 0, count: chunkSize - 8) + length.bigEndianBytes
+                lastBlock = [UInt8](repeating: 0, count: SHA256Round.chunkSize - 8) + length.bigEndianBytes
                 inProgress = false
             } else {
                 inProgress = true
             }
-            round.calculate(index: index, block: Data(block))
+            round.calculate(block: Data(block))
             index += 1
         }
-        if lastBlock.count == chunkSize {
-            round.calculate(index: index, block: Data(lastBlock))
+        if lastBlock.count == SHA256Round.chunkSize {
+            round.calculate(block: Data(lastBlock))
         }
         #if os(Linux)
         Glibc.close(streamReaderFileNumber)
@@ -82,6 +78,7 @@ public struct SHA256 {
 
 internal class SHA256Round {
     static let chunkSize = 64
+    /// first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311
     static let K: [UInt32] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
         0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -100,6 +97,7 @@ internal class SHA256Round {
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
         0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
     ]
+    /// first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19
     private var H: [UInt32] = [
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
         0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
@@ -107,13 +105,12 @@ internal class SHA256Round {
     var hashValue: [UInt8] {
         return H.flatMap { $0.bigEndianBytes }
     }
-    func calculate(index: Int, block: Data) {
+    func calculate(block: Data) {
         assert(block.count == Self.chunkSize)
-        var schedule = [UInt32](repeating: 0, count: Self.chunkSize)
-        for index in 0..<Self.chunkSize {
-            schedule[index] = index < 16
-                ? UInt32.unpack(from: block, offset: index * 4)
-                : schedule[index - 2].sigma1 &+ schedule[index - 7] &+ schedule[index - 15].sigma0 &+ schedule[index - 16]
+        var W = [UInt32](repeating: 0, count: Self.chunkSize)
+        for i in 0..<Self.chunkSize {
+            W[i] = i < 16 ? UInt32.unpack(from: block, offset: i * 4)
+                : W[i - 2].sigma1 &+ W[i - 7] &+ W[i - 15].sigma0 &+ W[i - 16]
         }
 
         var a = H[0]
@@ -125,8 +122,8 @@ internal class SHA256Round {
         var g = H[6]
         var h = H[7]
 
-        for t in 0..<64 {
-            let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ schedule[t]
+        for t in 0..<Self.chunkSize {
+            let t1 = h &+ e.gamma1 &+ UInt32.choose(x: e, y: f, z: g) &+ Self.K[t] &+ W[t]
             let t2 = a.gamma0 &+ UInt32.major(x: a, y: b, z: c)
             
             h = g

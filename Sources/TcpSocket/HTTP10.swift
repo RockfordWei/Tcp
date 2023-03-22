@@ -107,7 +107,11 @@ public struct HttpRequest {
         headers = Dictionary(uniqueKeysWithValues: keyValues)
         if let textContentLength = headers["Content-Length"], let contentLength = Int(textContentLength) {
             if contentLength > Self.contentLengthLimitation {
-                throw NSError(domain: "Bad Request (oversized)", code: 400, userInfo: ["Content-Length": contentLength, "Content-Length-Limitation": Self.contentLengthLimitation])
+                throw NSError(domain: "Bad Request", code: 400, userInfo: [
+                    "Content-Length": contentLength,
+                    "Content-Length-Limitation": Self.contentLengthLimitation,
+                    "Error": "Oversized"
+                ])
             }
             let size = body.count
             guard size >= contentLength else {
