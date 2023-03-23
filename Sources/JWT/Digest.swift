@@ -23,4 +23,5 @@ public extension DigestAlgorithm {
             return sha.hash
         }
     }
+    static let all: [Self] = [.SHA256, .SHA512]
 }
