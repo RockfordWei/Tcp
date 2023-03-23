@@ -92,4 +92,7 @@ public extension Data {
     var sha256: Data {
         return Data(SHA256(source: self).hash)
     }
+    var sha512: Data {
+        return Data(SHA512(source: self).hash)
+    }
 }
