@@ -12,7 +12,7 @@ import Darwin
 #endif
 import Foundation
 
-internal struct SHA256 {
+struct DigestAlgorithmSHA256 {
     internal static let ending: [UInt8] = [0x80]
     public let hash: [UInt8]
     public init(source: Data) {
@@ -83,7 +83,7 @@ internal struct SHA256 {
     }
 }
 
-internal class SHA256Round {
+fileprivate class SHA256Round {
     static let chunkSize = 64
     /// first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311
     static let K: [UInt32] = [

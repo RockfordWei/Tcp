@@ -68,24 +68,23 @@ final class JWTTests: XCTestCase {
         NSLog("generated: \(hash)")
         NSLog("expecting: \(wanted)")
         XCTAssertTrue(wanted.hasPrefix(hash))
-        if algo == .SHA256 {
-            var stream: [Int32] = [0, 0]
-            let streamed = source.withUnsafeBytes { pointer -> String in
-#if os(Linux)
-                Glibc.pipe(&stream)
-                Glibc.write(stream[1], pointer.baseAddress, source.count)
-                Glibc.close(stream[1])
-#else
-                Darwin.pipe(&stream)
-                Darwin.write(stream[1], pointer.baseAddress, source.count)
-                Darwin.close(stream[1])
-#endif
-                let sha = SHA256(streamReaderFileNumber: stream[0])
-                return sha.hash.hex()
-            }
-            NSLog("streaming: \(streamed)")
-            XCTAssertEqual(hash, streamed)
+        var stream: [Int32] = [0, 0]
+        let bytes: [UInt8] = source.map { $0 }
+        let streamed = bytes.withUnsafeBytes { pointer -> String in
+            #if os(Linux)
+            Glibc.pipe(&stream)
+            Glibc.write(stream[1], pointer.baseAddress, source.count)
+            Glibc.close(stream[1])
+            #else
+            Darwin.pipe(&stream)
+            Darwin.write(stream[1], pointer.baseAddress, source.count)
+            Darwin.close(stream[1])
+            #endif
+            let sha = DigestAlgorithm.hash(streamReaderFileNumber: stream[0], algorithm: algo)
+            return sha.hex
         }
+        NSLog("streaming: \(streamed)")
+        XCTAssertEqual(hash, streamed)
     }
     func testSha() throws {
         let expectations = (0..<20).compactMap { try? self._testShaRandom(index: $0, algo: $0 % 2 == 0 ? .SHA256 : .SHA512) }

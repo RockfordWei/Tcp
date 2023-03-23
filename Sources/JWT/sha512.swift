@@ -12,7 +12,7 @@ import Darwin
 #endif
 import Foundation
 
-internal struct SHA512 {
+struct DigestAlgorithmSHA512 {
     internal static let ending: [UInt8] = [0x80]
     public let hash: [UInt8]
     public init(source: Data) {
@@ -43,8 +43,52 @@ internal struct SHA512 {
         }
         hash = round.hashValue
     }
+    public init(streamReaderFileNumber: Int32) {
+        var totalBytes = 0
+        var index = 0
+        var inProgress = true
+        let round = SHA512Round()
+        var lastBlock: [UInt8] = []
+        while inProgress {
+            var block = [UInt8](repeating: 0, count: SHA512Round.chunkSize)
+            let size = block.withUnsafeMutableBytes { pointer -> Int in
+                #if os(Linux)
+                return Glibc.read(streamReaderFileNumber, pointer.baseAddress, SHA512Round.chunkSize)
+                #else
+                return Darwin.read(streamReaderFileNumber, pointer.baseAddress, SHA512Round.chunkSize)
+                #endif
+            }
+            if size >= 0 {
+                totalBytes += size
+            }
+            let length = UInt64(totalBytes)
+            let lengthLow = length << 3
+            let lengthHigh = length > 8 ? length >> 61 : 0
+            if size < (SHA512Round.chunkSize - 17) {
+                block = [UInt8](block[0..<size]) + Self.ending + [UInt8](repeating: 0, count: SHA512Round.chunkSize - size - 17) + lengthHigh.bigEndianBytes + lengthLow.bigEndianBytes
+                inProgress = false
+            } else if size < SHA512Round.chunkSize {
+                block[size] = Self.ending[0]
+                lastBlock = [UInt8](repeating: 0, count: SHA512Round.chunkSize - 16) + lengthHigh.bigEndianBytes + lengthLow.bigEndianBytes
+                inProgress = false
+            } else {
+                inProgress = true
+            }
+            round.calculate(block: Data(block))
+            index += 1
+        }
+        if lastBlock.count == SHA512Round.chunkSize {
+            round.calculate(block: Data(lastBlock))
+        }
+        #if os(Linux)
+        Glibc.close(streamReaderFileNumber)
+        #else
+        Darwin.close(streamReaderFileNumber)
+        #endif
+        hash = round.hashValue
+    }
 }
-internal class SHA512Round {
+fileprivate class SHA512Round {
     static let chunkSize = 128
     static let rounds = 80
     static let K: [UInt64] = [

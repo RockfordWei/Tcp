@@ -80,7 +80,7 @@ public extension UInt64 {
 }
 
 public extension Array where Element == UInt8 {
-    func hex() -> String {
+    var hex: String {
         return Data(self).hex
     }
     func digest(algorithm: Digest) -> Self {
@@ -93,10 +93,10 @@ public extension Data {
         return map { String(format: "%02x", $0) }.joined()
     }
     var sha256: Data {
-        return Data(SHA256(source: self).hash)
+        return Data(DigestAlgorithmSHA256(source: self).hash)
     }
     var sha512: Data {
-        return Data(SHA512(source: self).hash)
+        return Data(DigestAlgorithmSHA512(source: self).hash)
     }
     func digest(algorithm: Digest) -> Data {
         switch algorithm {
