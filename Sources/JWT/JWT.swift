@@ -26,7 +26,7 @@ public struct JWT {
         let headText = try jsonEncoder.encode(head).base64EncodedString()
         let payloadText = try jsonEncoder.encode(claims).base64EncodedString()
         let source = [headText, payloadText, secret].joined(separator: ".")
-        let hash = HMAC.digestBase64(message: source, by: secret)
+        let hash = HMAC.digestBase64(message: source, by: secret, using: .SHA256)
         return [headText, payloadText, hash].joined(separator: ".")
     }
     static func decode<T: Codable>(token: String, secret: String) throws -> T {
@@ -44,7 +44,7 @@ public struct JWT {
             throw NSError(domain: "algorithm \(head.alg) is not implemented", code: 0)
         }
         let source = [String(parts[0]), String(parts[1]), secret].joined(separator: ".")
-        let hash = HMAC.digestBase64(message: source, by: secret)
+        let hash = HMAC.digestBase64(message: source, by: secret, using: .SHA256)
         guard hash == String(parts[2]) else {
             throw NSError(domain: "signature is not matched", code: 0)
         }
