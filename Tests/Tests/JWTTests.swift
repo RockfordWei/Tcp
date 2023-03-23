@@ -10,14 +10,15 @@ import Foundation
 import XCTest
 
 final class JWTTests: XCTestCase {
-    func getShaData(input: Data, algo: Int = 256) throws -> Data {
+    func getShaData(input: Data, algo: Digest = .SHA256) throws -> Data {
         let process = Process()
         let stdInp = Pipe()
         let stdOut = Pipe()
         let stdErr = Pipe()
+        let algorithm = algo.rawValue.replacingOccurrences(of: "SHA", with: "")
         process.standardOutput = stdOut
         process.standardError = stdErr
-        process.arguments = ["-a", "\(algo)"]
+        process.arguments = ["-a", algorithm]
         process.executableURL = URL(string: "file:///usr/bin/shasum")
         process.standardInput = stdInp
         stdInp.fileHandleForWriting.write(input)
@@ -37,14 +38,14 @@ final class JWTTests: XCTestCase {
         try stdOut.fileHandleForReading.close()
         return data
     }
-    func getShaHex(input: Data, algo: Int = 256) throws -> String {
+    func getShaHex(input: Data, algo: Digest) throws -> String {
         let data = try getShaData(input: input, algo: algo)
         guard let text = String(data: data, encoding: .utf8) else {
             throw NSError(domain: "unexpected output from shasum command", code: 0, userInfo: nil)
         }
         return text
     }
-    func _testSha256Random(index: Int) throws -> XCTestExpectation {
+    func _testShaRandom(index: Int, algo: Digest) throws -> XCTestExpectation {
         let size = Int.random(in: 0..<65536)
         let exp = XCTestExpectation(description: "testRandom\(index)")
         DispatchQueue.global(qos: .background).async {
@@ -53,7 +54,7 @@ final class JWTTests: XCTestCase {
             }
             let source = Data(bytes)
             do {
-                try self._testSha256(source: source)
+                try self._testSha(source: source, algo: algo)
             } catch {
                 XCTFail("random test #\(index) with \(size) bytes failed: \(error)")
             }
@@ -61,53 +62,34 @@ final class JWTTests: XCTestCase {
         }
         return exp
     }
-    func _testSha256(source: Data) throws {
-        let hash = source.sha256.hex
-        let wanted = try getShaHex(input: source)
-        var stream: [Int32] = [0, 0]
-        let streamed = source.withUnsafeBytes { pointer -> String in
-            #if os(Linux)
-            Glibc.pipe(&stream)
-            Glibc.write(stream[1], pointer.baseAddress, source.count)
-            Glibc.close(stream[1])
-            #else
-            Darwin.pipe(&stream)
-            Darwin.write(stream[1], pointer.baseAddress, source.count)
-            Darwin.close(stream[1])
-            #endif
-            let sha = SHA256(streamReaderFileNumber: stream[0])
-            return sha.hash.hex()
+    func _testSha(source: Data, algo: Digest) throws {
+        let hash = source.digest(algorithm: algo).hex
+        let wanted = try getShaHex(input: source, algo: algo)
+        NSLog("generated: \(hash)")
+        NSLog("expecting: \(wanted)")
+        XCTAssertTrue(wanted.hasPrefix(hash))
+        if algo == .SHA256 {
+            var stream: [Int32] = [0, 0]
+            let streamed = source.withUnsafeBytes { pointer -> String in
+#if os(Linux)
+                Glibc.pipe(&stream)
+                Glibc.write(stream[1], pointer.baseAddress, source.count)
+                Glibc.close(stream[1])
+#else
+                Darwin.pipe(&stream)
+                Darwin.write(stream[1], pointer.baseAddress, source.count)
+                Darwin.close(stream[1])
+#endif
+                let sha = SHA256(streamReaderFileNumber: stream[0])
+                return sha.hash.hex()
+            }
+            NSLog("streaming: \(streamed)")
+            XCTAssertEqual(hash, streamed)
         }
-        NSLog("generated: \(hash)")
-        NSLog("expecting: \(wanted)")
-        NSLog("streaming: \(streamed)")
-        XCTAssertTrue(wanted.hasPrefix(hash))
-        XCTAssertEqual(hash, streamed)
     }
-    func _testSha512(source: Data) throws {
-        let hash = source.sha512.hex
-        let wanted = try getShaHex(input: source, algo: 512)
-        NSLog("generated: \(hash)")
-        NSLog("expecting: \(wanted)")
-        XCTAssertTrue(wanted.hasPrefix(hash))
-    }
-    func _testSha256(text: String) throws {
-        let source = try XCTUnwrap(text.data(using: .ascii))
-        try _testSha256(source: source)
-    }
-    func _testSha512(text: String) throws {
-        let source = try XCTUnwrap(text.data(using: .ascii))
-        try _testSha512(source: source)
-    }
-    func testSha256FixedCase() throws {
-        try _testSha256(text: "hello\n")
-    }
-    func testSha256() throws {
-        let expectations = (0..<10).compactMap { try? self._testSha256Random(index: $0) }
+    func testSha() throws {
+        let expectations = (0..<20).compactMap { try? self._testShaRandom(index: $0, algo: $0 % 2 == 0 ? .SHA256 : .SHA512) }
         wait(for: expectations, timeout: 60)
-    }
-    func testSha512FixedCase() throws {
-        try _testSha512(text: "hello\n")
     }
     func testRotateRight() throws {
         let x = UInt32(0x12345678)
@@ -163,13 +145,10 @@ final class JWTTests: XCTestCase {
         }
     }
     static var allTests = [
-        ("testSha512FixedCase", testSha512FixedCase),
-        ("testSha256FixedCase", testSha256FixedCase),
-        ("testSha256", testSha256),
+        ("testSha", testSha),
         ("testRotateRight", testRotateRight),
         ("testMajor", testMajor),
         ("testChoose", testChoose),
-        ("testSha256", testSha256),
         ("testSigma0", testSigma0),
         ("testSigma1", testSigma1),
         ("testGamma0", testGamma0),

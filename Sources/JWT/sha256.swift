@@ -12,7 +12,7 @@ import Darwin
 #endif
 import Foundation
 
-public struct SHA256 {
+internal struct SHA256 {
     internal static let ending: [UInt8] = [0x80]
     public let hash: [UInt8]
     public init(source: Data) {

@@ -8,11 +8,11 @@
 import Foundation
 
 public struct HMAC {
-    public static func digest(source: Data, by key: Data) -> Data {
+    public static func digest(source: Data, by key: Data, using algorithm: DigestAlgorithm = .SHA256) -> Data {
         let blockSize = 64
         let normalizedKey: Data
         if key.count > blockSize {
-            normalizedKey = key.sha256
+            normalizedKey = key.digest(algorithm: algorithm)
         } else if key.count < blockSize {
             var mutableKey = key
             mutableKey.append(contentsOf: Data(repeating: 0, count: blockSize - key.count))
@@ -26,8 +26,8 @@ public struct HMAC {
         let innerData = hash(pad: Data(innerKey), source: source)
         return hash(pad: Data(outerKey), source: innerData)
     }
-    private static func hash(pad: Data, source: Data) -> Data {
-        return Data(pad + source).sha256
+    private static func hash(pad: Data, source: Data, using algorithm: DigestAlgorithm = .SHA256) -> Data {
+        return Data(pad + source).digest(algorithm: algorithm)
     }
     public static func digestHex(message: String, by key: String) -> String {
         let source = message.data(using: .utf8) ?? Data()
