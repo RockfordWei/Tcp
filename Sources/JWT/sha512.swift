@@ -88,7 +88,7 @@ struct DigestAlgorithmSHA512 {
         hash = round.hashValue
     }
 }
-fileprivate class SHA512Round {
+class SHA512Round {
     static let chunkSize = 128
     static let rounds = 80
     static let K: [UInt64] = [

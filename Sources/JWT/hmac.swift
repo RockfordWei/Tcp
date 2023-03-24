@@ -9,10 +9,7 @@ import Foundation
 
 public struct HMAC {
     public static func digest(source: Data, by key: Data, using algorithm: DigestAlgorithm = .SHA256) -> Data {
-        guard algorithm == .SHA256 else {
-            fatalError("\(algorithm) for HMAC digest is not implemented.")
-        }
-        let blockSize = 64
+        let blockSize = Digest.getBlockSize(algorithm: algorithm)
         let normalizedKey: Data
         if key.count > blockSize {
             normalizedKey = key.digest(algorithm: algorithm)
@@ -26,8 +23,8 @@ public struct HMAC {
         assert(normalizedKey.count == blockSize)
         let innerKey = normalizedKey.map { UInt8(0x36) ^ $0 }
         let outerKey = normalizedKey.map { UInt8(0x5c) ^ $0 }
-        let innerData = hash(pad: Data(innerKey), source: source)
-        return hash(pad: Data(outerKey), source: innerData)
+        let innerData = hash(pad: Data(innerKey), source: source, using: algorithm)
+        return hash(pad: Data(outerKey), source: innerData, using: algorithm)
     }
     private static func hash(pad: Data, source: Data, using algorithm: DigestAlgorithm = .SHA256) -> Data {
         return Data(pad + source).digest(algorithm: algorithm)

@@ -38,6 +38,35 @@ final class JWTTests: XCTestCase {
         try stdOut.fileHandleForReading.close()
         return data
     }
+    func getHmacText(input: String, secret: String, algo: Digest = .SHA256) throws -> String {
+        let process = Process()
+        let stdInp = Pipe()
+        let stdOut = Pipe()
+        let stdErr = Pipe()
+        let algorithm = "-" + algo.rawValue.lowercased()
+        process.standardOutput = stdOut
+        process.standardError = stdErr
+        process.arguments = ["dgst", algorithm, "-hmac", secret]
+        process.executableURL = URL(string: "file:///usr/bin/openssl")
+        process.standardInput = stdInp
+        let inputData = try XCTUnwrap(input.data(using: .utf8))
+        stdInp.fileHandleForWriting.write(inputData)
+        try stdInp.fileHandleForWriting.close()
+        try process.run()
+        process.waitUntilExit()
+        let errData = stdErr.fileHandleForReading.readDataToEndOfFile()
+        try stdErr.fileHandleForReading.close()
+        if !errData.isEmpty {
+            if let errText = String(data: errData, encoding: .utf8) {
+                throw NSError(domain: errText, code: 0, userInfo: nil)
+            } else {
+                throw NSError(domain: "error", code: 0, userInfo: ["data": errData])
+            }
+        }
+        let data = stdOut.fileHandleForReading.readDataToEndOfFile()
+        try stdOut.fileHandleForReading.close()
+        return try XCTUnwrap(String(data: data, encoding: .utf8)).trimmed
+    }
     func getShaHex(input: Data, algo: Digest) throws -> String {
         let data = try getShaData(input: input, algo: algo)
         guard let text = String(data: data, encoding: .utf8) else {
@@ -122,9 +151,27 @@ final class JWTTests: XCTestCase {
         let x: UInt32 = 0x12345678
         XCTAssertEqual(UInt32(0x3561abda), x.gamma1)
     }
+    func _testHmac(message: String, secret: String, algorithm: Digest) throws {
+        NSLog("testing HMAC \(algorithm) with \(message.count) bytes input and \(secret.count) bytes secret")
+        let actual = HMAC.digestHex(message: message, by: secret, using: algorithm)
+        let wanted = try getHmacText(input: message, secret: secret, algo: algorithm)
+        XCTAssert(wanted.contains(actual))
+    }
+    func _testHmacRandom(messageSeed: String, secretSeed: String, algorithm: Digest) throws {
+        var message = ""
+        var secret = ""
+        for _ in 1..<256 {
+            message += messageSeed
+            secret += secretSeed
+        }
+        try _testHmac(message: message, secret: secret, algorithm: algorithm)
+    }
     func testHMAC() throws {
-        let hmac = HMAC.digestHex(message: "hello\n", by: "abcd1234")
-        XCTAssertEqual(hmac, "e6f2cd5247ea78055ad444edd43d425a8a22c533b1258af89ba004e3d1801d65")
+        let message = "hello\n"
+        let secret = "abcd1234"
+        for algorithm in Digest.all {
+            try _testHmac(message: message, secret: secret, algorithm: algorithm)
+        }
     }
     func testJWT() throws {
         let secret = "abcd1234"

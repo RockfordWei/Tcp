@@ -83,7 +83,7 @@ struct DigestAlgorithmSHA256 {
     }
 }
 
-fileprivate class SHA256Round {
+class SHA256Round {
     static let chunkSize = 64
     /// first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311
     static let K: [UInt32] = [

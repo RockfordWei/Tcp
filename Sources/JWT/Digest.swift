@@ -24,4 +24,12 @@ public extension DigestAlgorithm {
         }
     }
     static let all: [Self] = [.SHA256, .SHA512]
+    static func getBlockSize(algorithm: DigestAlgorithm) -> Int {
+        switch algorithm {
+        case .SHA256:
+            return SHA256Round.chunkSize
+        case .SHA512:
+            return SHA512Round.chunkSize
+        }
+    }
 }
