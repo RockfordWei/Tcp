@@ -12,21 +12,21 @@ public struct JWTHead: Codable {
     public init(alg: String) {
         self.alg = alg
     }
-    public enum Algorithm: String {
-        case HS256
-    }
-    var algorithm: Algorithm? {
-        return Algorithm(rawValue: alg)
+    var algorithm: DigestAlgorithm? {
+        return DigestAlgorithm(rawValue: alg) ?? DigestAlgorithm(rawValue: alg.replacingOccurrences(of: "HS", with: "SHA"))
     }
 }
 public struct JWT {
-    static func encode<T: Codable>(claims: T, secret: String) throws -> String {
-        let head = JWTHead(alg: JWTHead.Algorithm.HS256.rawValue)
+    static func encode<T: Codable>(claims: T, secret: String, algorithm: String = "HS256") throws -> String {
+        let head = JWTHead(alg: algorithm)
+        guard let algo = head.algorithm else {
+            throw NSError(domain: "invalid algorithm \(algorithm)", code: 0)
+        }
         let jsonEncoder = JSONEncoder()
         let headText = try jsonEncoder.encode(head).base64EncodedString()
         let payloadText = try jsonEncoder.encode(claims).base64EncodedString()
         let source = [headText, payloadText, secret].joined(separator: ".")
-        let hash = HMAC.digestBase64(message: source, by: secret, using: .SHA256)
+        let hash = HMAC.digestBase64(message: source, by: secret, using: algo)
         return [headText, payloadText, hash].joined(separator: ".")
     }
     static func decode<T: Codable>(token: String, secret: String) throws -> T {
@@ -40,11 +40,11 @@ public struct JWT {
         }
         let jsonDecoder = JSONDecoder()
         let head = try jsonDecoder.decode(JWTHead.self, from: headData)
-        guard head.algorithm == .HS256 else {
+        guard let algo = head.algorithm else {
             throw NSError(domain: "algorithm \(head.alg) is not implemented", code: 0)
         }
         let source = [String(parts[0]), String(parts[1]), secret].joined(separator: ".")
-        let hash = HMAC.digestBase64(message: source, by: secret, using: .SHA256)
+        let hash = HMAC.digestBase64(message: source, by: secret, using: algo)
         guard hash == String(parts[2]) else {
             throw NSError(domain: "signature is not matched", code: 0)
         }

@@ -185,13 +185,13 @@ final class JWTTests: XCTestCase {
         }
         wait(for: expectations, timeout: 60)
     }
-    func testJWT() throws {
+    func _testJWT(algorithm: String) throws {
         let secret = "abcd1234"
         let claim = JWTExamplePayload(email: "guest@nowhere.unknown", issuer: "authority", timestamp: Date())
-        let token = try JWT.encode(claims: claim, secret: secret)
+        let token = try JWT.encode(claims: claim, secret: secret, algorithm: algorithm)
         let parts = token.split(separator: ".")
         XCTAssertEqual(parts.count, 3)
-        NSLog("JWT token: \(token)")
+        NSLog("JWT \(algorithm) token: \(token)")
         let payload: JWTExamplePayload = try JWT.decode(token: token, secret: secret)
         XCTAssertEqual(payload, claim)
         let compromised = [String(parts[0]), String(parts[1]), "1234abcd"].joined(separator: ".")
@@ -201,6 +201,10 @@ final class JWTTests: XCTestCase {
         } catch {
             XCTAssertEqual((error as NSError).domain, "signature is not matched")
         }
+    }
+    func testJWT() throws {
+        try _testJWT(algorithm: "HS256")
+        try _testJWT(algorithm: "HS512")
     }
     static var allTests = [
         ("testSha", testSha),
