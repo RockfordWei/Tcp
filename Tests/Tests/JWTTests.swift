@@ -92,14 +92,14 @@ final class JWTTests: XCTestCase {
         return exp
     }
     func _testSha(source: Data, algo: DigestAlgorithm) throws {
-        let hash = source.digest(algorithm: algo).hex
+        let hash = try source.digest(algorithm: algo).hex
         let wanted = try getShaHex(input: source, algo: algo)
         NSLog("generated: \(hash)")
         NSLog("expecting: \(wanted)")
         XCTAssertTrue(wanted.hasPrefix(hash))
         var stream: [Int32] = [0, 0]
         let bytes: [UInt8] = source.map { $0 }
-        let streamed = bytes.withUnsafeBytes { pointer -> String in
+        let streamed = try bytes.withUnsafeBytes { pointer -> String in
             #if os(Linux)
             Glibc.pipe(&stream)
             Glibc.write(stream[1], pointer.baseAddress, source.count)
@@ -109,7 +109,7 @@ final class JWTTests: XCTestCase {
             Darwin.write(stream[1], pointer.baseAddress, source.count)
             Darwin.close(stream[1])
             #endif
-            let sha = DigestAlgorithm.hash(streamReaderFileNumber: stream[0], algorithm: algo)
+            let sha = try DigestAlgorithm.hash(streamReaderFileNumber: stream[0], algorithm: algo)
             return sha.hex
         }
         NSLog("streaming: \(streamed)")
@@ -153,7 +153,7 @@ final class JWTTests: XCTestCase {
     }
     func _testHmac(message: String, secret: String, algorithm: DigestAlgorithm) throws {
         NSLog("testing HMAC \(algorithm) with \(message.count) bytes input and \(secret.count) bytes secret")
-        let actual = HMAC.digestHex(message: message, by: secret, using: algorithm)
+        let actual = try HMAC.digestHex(message: message, by: secret, using: algorithm)
         let wanted = try getHmacText(input: message, secret: secret, algo: algorithm)
         XCTAssert(wanted.contains(actual))
     }

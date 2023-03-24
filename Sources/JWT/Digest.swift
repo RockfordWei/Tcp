@@ -11,13 +11,13 @@ public enum DigestAlgorithm: String {
 }
 
 public extension DigestAlgorithm {
-    static func hash(streamReaderFileNumber: Int32, algorithm: Self) -> [UInt8] {
+    static func hash(streamReaderFileNumber: Int32, algorithm: Self) throws -> [UInt8] {
         switch algorithm {
         case .SHA256:
-            let sha = DigestAlgorithmSHA256(streamReaderFileNumber: streamReaderFileNumber)
+            let sha = try DigestAlgorithmSHA256(streamReaderFileNumber: streamReaderFileNumber)
             return sha.hash
         case .SHA512:
-            let sha = DigestAlgorithmSHA512(streamReaderFileNumber: streamReaderFileNumber)
+            let sha = try DigestAlgorithmSHA512(streamReaderFileNumber: streamReaderFileNumber)
             return sha.hash
         }
     }

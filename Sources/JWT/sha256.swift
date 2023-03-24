@@ -15,7 +15,7 @@ import Foundation
 struct DigestAlgorithmSHA256 {
     internal static let ending: [UInt8] = [0x80]
     public let hash: [UInt8]
-    public init(source: Data) {
+    public init(source: Data) throws {
         var message = source
         let length = UInt64(message.count * 8)
         var tailSize = SHA256Round.chunkSize - 8
@@ -35,11 +35,14 @@ struct DigestAlgorithmSHA256 {
             let start = index * SHA256Round.chunkSize
             let end = start + SHA256Round.chunkSize
             let block = Data(message[start..<end])
-            round.calculate(block: block)
+            try round.calculate(block: block)
         }
         hash = round.hashValue
     }
-    public init(streamReaderFileNumber: Int32) {
+    public init(streamReaderFileNumber: Int32) throws {
+        guard streamReaderFileNumber > 0 else {
+            throw NSError(domain: "invalid file number", code: 0)
+        }
         var totalBytes = 0
         var index = 0
         var inProgress = true
@@ -68,11 +71,11 @@ struct DigestAlgorithmSHA256 {
             } else {
                 inProgress = true
             }
-            round.calculate(block: Data(block))
+            try round.calculate(block: Data(block))
             index += 1
         }
         if lastBlock.count == SHA256Round.chunkSize {
-            round.calculate(block: Data(lastBlock))
+            try round.calculate(block: Data(lastBlock))
         }
         #if os(Linux)
         Glibc.close(streamReaderFileNumber)
@@ -112,8 +115,13 @@ class SHA256Round {
     var hashValue: [UInt8] {
         return H.flatMap { $0.bigEndianBytes }
     }
-    func calculate(block: Data) {
-        assert(block.count == Self.chunkSize)
+    func calculate(block: Data) throws {
+        guard block.count == Self.chunkSize else {
+            throw NSError(domain: "invalid block size", code: 0, userInfo: [
+                "expecting": Self.chunkSize,
+                "actual": block.count
+            ])
+        }
         var W = [UInt32](repeating: 0, count: Self.chunkSize)
         for i in 0..<Self.chunkSize {
             W[i] = i < 16 ? UInt32.unpack(from: block, offset: i * 4)
