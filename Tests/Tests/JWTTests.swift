@@ -10,7 +10,7 @@ import Foundation
 import XCTest
 
 final class JWTTests: XCTestCase {
-    func getShaData(input: Data, algo: Digest = .SHA256) throws -> Data {
+    func getShaData(input: Data, algo: DigestAlgorithm = .SHA256) throws -> Data {
         let process = Process()
         let stdInp = Pipe()
         let stdOut = Pipe()
@@ -38,7 +38,7 @@ final class JWTTests: XCTestCase {
         try stdOut.fileHandleForReading.close()
         return data
     }
-    func getHmacText(input: String, secret: String, algo: Digest = .SHA256) throws -> String {
+    func getHmacText(input: String, secret: String, algo: DigestAlgorithm = .SHA256) throws -> String {
         let process = Process()
         let stdInp = Pipe()
         let stdOut = Pipe()
@@ -67,14 +67,14 @@ final class JWTTests: XCTestCase {
         try stdOut.fileHandleForReading.close()
         return try XCTUnwrap(String(data: data, encoding: .utf8)).trimmed
     }
-    func getShaHex(input: Data, algo: Digest) throws -> String {
+    func getShaHex(input: Data, algo: DigestAlgorithm) throws -> String {
         let data = try getShaData(input: input, algo: algo)
         guard let text = String(data: data, encoding: .utf8) else {
             throw NSError(domain: "unexpected output from shasum command", code: 0, userInfo: nil)
         }
         return text
     }
-    func _testShaRandom(index: Int, algo: Digest) throws -> XCTestExpectation {
+    func _testShaRandom(index: Int, algo: DigestAlgorithm) throws -> XCTestExpectation {
         let size = Int.random(in: 0..<65536)
         let exp = XCTestExpectation(description: "testRandom\(index)")
         DispatchQueue.global(qos: .background).async {
@@ -91,7 +91,7 @@ final class JWTTests: XCTestCase {
         }
         return exp
     }
-    func _testSha(source: Data, algo: Digest) throws {
+    func _testSha(source: Data, algo: DigestAlgorithm) throws {
         let hash = source.digest(algorithm: algo).hex
         let wanted = try getShaHex(input: source, algo: algo)
         NSLog("generated: \(hash)")
@@ -151,27 +151,39 @@ final class JWTTests: XCTestCase {
         let x: UInt32 = 0x12345678
         XCTAssertEqual(UInt32(0x3561abda), x.gamma1)
     }
-    func _testHmac(message: String, secret: String, algorithm: Digest) throws {
+    func _testHmac(message: String, secret: String, algorithm: DigestAlgorithm) throws {
         NSLog("testing HMAC \(algorithm) with \(message.count) bytes input and \(secret.count) bytes secret")
         let actual = HMAC.digestHex(message: message, by: secret, using: algorithm)
         let wanted = try getHmacText(input: message, secret: secret, algo: algorithm)
         XCTAssert(wanted.contains(actual))
     }
-    func _testHmacRandom(messageSeed: String, secretSeed: String, algorithm: Digest) throws {
-        var message = ""
-        var secret = ""
-        for _ in 1..<256 {
-            message += messageSeed
-            secret += secretSeed
+    func _testHmacRandom(messageSeed: String, secretSeed: String, round: Int, algorithm: DigestAlgorithm) -> XCTestExpectation {
+        let exp = expectation(description: "hmac-\(algorithm)-random-\(round)")
+        DispatchQueue.global(qos: .background).async {
+            var message = ""
+            var secret = ""
+            for _ in 1..<round {
+                message += messageSeed
+                secret += secretSeed
+            }
+            do {
+                try self._testHmac(message: message, secret: secret, algorithm: algorithm)
+            } catch {
+                XCTFail("\(exp.description) failed")
+            }
+            exp.fulfill()
         }
-        try _testHmac(message: message, secret: secret, algorithm: algorithm)
+        return exp
     }
     func testHMAC() throws {
         let message = "hello\n"
         let secret = "abcd1234"
-        for algorithm in Digest.all {
-            try _testHmac(message: message, secret: secret, algorithm: algorithm)
+        let expectations = (0..<20).map { index -> XCTestExpectation in
+            let algo: DigestAlgorithm = index % 2 == 0 ? .SHA256 : .SHA512
+            let round = Int.random(in: 1..<256)
+            return self._testHmacRandom(messageSeed: message, secretSeed: secret, round: round, algorithm: algo)
         }
+        wait(for: expectations, timeout: 60)
     }
     func testJWT() throws {
         let secret = "abcd1234"

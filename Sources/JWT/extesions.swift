@@ -83,7 +83,7 @@ public extension Array where Element == UInt8 {
     var hex: String {
         return Data(self).hex
     }
-    func digest(algorithm: Digest) -> Self {
+    func digest(algorithm: DigestAlgorithm) -> Self {
         return Data(self).digest(algorithm: algorithm).map { $0 }
     }
 }
@@ -98,12 +98,18 @@ public extension Data {
     var sha512: Data {
         return Data(DigestAlgorithmSHA512(source: self).hash)
     }
-    func digest(algorithm: Digest) -> Data {
+    func digest(algorithm: DigestAlgorithm) -> Data {
         switch algorithm {
         case .SHA256:
             return sha256
         case .SHA512:
             return sha512
         }
+    }
+    static func random(size: Int) -> Self {
+        let bytes: [UInt8] = (0..<size).map { _ -> UInt8 in
+            return UInt8.random(in: 0..<255)
+        }
+        return Data(bytes)
     }
 }

@@ -10,8 +10,6 @@ public enum DigestAlgorithm: String {
     case SHA512 = "SHA512"
 }
 
-public typealias Digest = DigestAlgorithm
-
 public extension DigestAlgorithm {
     static func hash(streamReaderFileNumber: Int32, algorithm: Self) -> [UInt8] {
         switch algorithm {

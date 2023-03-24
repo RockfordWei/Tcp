@@ -9,10 +9,12 @@ import Foundation
 
 public struct HMAC {
     public static func digest(source: Data, by key: Data, using algorithm: DigestAlgorithm = .SHA256) -> Data {
-        let blockSize = Digest.getBlockSize(algorithm: algorithm)
+        let blockSize = DigestAlgorithm.getBlockSize(algorithm: algorithm)
         let normalizedKey: Data
         if key.count > blockSize {
-            normalizedKey = key.digest(algorithm: algorithm)
+            let keyHash = key.digest(algorithm: algorithm)
+            let padding = Data(repeating: 0, count: blockSize - keyHash.count)
+            normalizedKey = keyHash + padding
         } else if key.count < blockSize {
             var mutableKey = key
             mutableKey.append(contentsOf: Data(repeating: 0, count: blockSize - key.count))
