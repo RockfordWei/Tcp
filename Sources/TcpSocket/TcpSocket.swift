@@ -273,7 +273,7 @@ public extension TcpSocket {
 }
 
 public extension TcpSocket {
-    func recv(peekOnly: Bool = false, bufferSize: Int = 16384) throws -> Data {
+    func recv(peekOnly: Bool = false, bufferSize: Int = 65536) throws -> Data {
         var data = Data(repeating: 0, count: bufferSize)
         let result = data.withUnsafeMutableBytes { pointer -> Int in
             guard let baseAddress = pointer.baseAddress?.bindMemory(to: UInt8.self, capacity: bufferSize) else {
