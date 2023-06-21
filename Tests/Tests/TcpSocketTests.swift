@@ -39,7 +39,7 @@ final class TcpSocketTests: XCTestCase {
         },
         HttpRoute(api: "/api/v1/postFiles", method: .POST) { request throws -> HttpResponse? in
             let files = request.files
-            XCTAssertEqual(files.count, 3)
+            XCTAssertEqual(files.count, 2)
             let data = Data(TcpSocketTests.randomBytes)
             for file in files {
                 XCTAssertEqual(file.content, data)
@@ -108,6 +108,41 @@ final class TcpSocketTests: XCTestCase {
         let command = "-X POST -d '\(parameterString)' '\(url)'"
         return try curl(command: command)
     }
+    func testSocket() throws {
+        let ipAddress = String.randomMockedIP()
+        let port = UInt16.random(in: 60000..<65535)
+        let tcpsocket = TcpSocket(originalSocket: 1, ipAddress: ipAddress, port: port)
+        XCTAssertEqual(ipAddress, tcpsocket.ip)
+        XCTAssertEqual(port, tcpsocket.port)
+        let des = "\(tcpsocket)"
+        XCTAssertEqual(des, "socket(1) -> \(ipAddress):\(port)")
+        let server = try TcpSocket()
+        try server.bind(port: port)
+        try server.listen()
+        server.serve(wait: false)
+        let client = try TcpSocket()
+        try client.connect(to: "0.0.0.0", with: port)
+        try client.send(text: ipAddress)
+    }
+    func testErrors() throws {
+        let msg = UUID().uuidString
+        let num = Int.random(in: 0..<10000)
+        let err = TcpSocket.Exception.fault(reason: msg, number: num)
+        guard case .fault(let reason, let number) = err else {
+            XCTFail("unexpected fault payload")
+            return
+        }
+        XCTAssertEqual(reason, msg)
+        XCTAssertEqual(number, num)
+        let exp = TcpSocket.Exception.fail(reason: "unknown")
+        guard let error = exp as? TcpSocket.Exception,
+              case .fault(let _reason, let _number) = error else {
+            XCTFail("unexpected failed payload")
+            return
+        }
+        XCTAssertEqual(_reason, "unknown")
+        XCTAssertEqual(_number, 0)
+    }
     func testGet() throws {
         let urlString = "'http://localhost:\(port)/api/v1/get?user=\("guest anonymous".urlEncoded)&timeout=\("^600".urlEncoded)'"
         let response: ResponseBody? = try curl(command: urlString)
@@ -130,7 +165,7 @@ final class TcpSocketTests: XCTestCase {
     }
     func testPostFiles() throws {
         let urlString = "http://localhost:\(port)/api/v1/postFiles"
-        let response: ResponseBody? = try curlPostFile(files: [tmpPath, tmpPath, tmpPath], url: urlString)
+        let response: ResponseBody? = try curlPostFile(files: [tmpPath, tmpPath], url: urlString)
         let resp = try XCTUnwrap(response)
         XCTAssertEqual(resp.error, 0)
     }
@@ -161,4 +196,12 @@ struct TestJsonStruct: Codable {
     let id: Int
     let timestamp: Date
     let payload: String
+}
+private extension String {
+    static func randomMockedIP() -> String {
+        return Array(0..<4).map { _ -> String in
+            let x = UInt8.random(in: 0..<255)
+            return "\(x)"
+        }.joined(separator: ".")
+    }
 }

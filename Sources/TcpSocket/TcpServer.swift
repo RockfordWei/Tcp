@@ -105,7 +105,7 @@ public extension TcpSocket {
             }
         }
     }
-    func serve(queue: DispatchQueue = .global(qos: .background)) {
+    func serve(queue: DispatchQueue = .global(qos: .background), wait: Bool = true) {
         guard live else { return }
         let signal = DispatchSemaphore(value: 0)
         queue.async {
@@ -120,6 +120,8 @@ public extension TcpSocket {
                 self.live = false
             }
         }
-        signal.wait()
+        if wait {
+            signal.wait()
+        }
     }
 }
