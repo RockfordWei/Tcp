@@ -125,23 +125,24 @@ final class TcpSocketTests: XCTestCase {
         try client.send(text: ipAddress)
     }
     func testErrors() throws {
-        let msg = UUID().uuidString
-        let num = Int.random(in: 0..<10000)
-        let err = TcpSocket.Exception.fault(reason: msg, number: num)
-        guard case .fault(let reason, let number) = err else {
-            XCTFail("unexpected fault payload")
-            return
+        let reason = UUID().uuidString
+        let errorCode = Int.random(in: 0..<9999)
+        let randomError = TcpContext.fault(reason: reason, code: errorCode) as NSError
+        XCTAssertEqual(randomError.domain, reason)
+        XCTAssertEqual(randomError.code, errorCode)
+        XCTAssert(randomError.userInfo.isEmpty)
+        for (context, messages) in TcpContext.errorMessages {
+            for (errorNumber, errorMessage) in messages {
+                errno = Int32(errorNumber)
+                let error = try XCTUnwrap(TcpContext.lookupError(result: -1, context: context))
+                let exception = error as NSError
+                XCTAssertEqual(exception.domain, errorMessage)
+                XCTAssertEqual(exception.code, Int(errorNumber))
+                let userInfo = try XCTUnwrap(exception.userInfo)
+                let objectContext = try XCTUnwrap(userInfo["context"] as? TcpContext)
+                XCTAssertEqual(context, objectContext)
+            }
         }
-        XCTAssertEqual(reason, msg)
-        XCTAssertEqual(number, num)
-        let exp = TcpSocket.Exception.fail(reason: "unknown")
-        guard let error = exp as? TcpSocket.Exception,
-              case .fault(let _reason, let _number) = error else {
-            XCTFail("unexpected failed payload")
-            return
-        }
-        XCTAssertEqual(_reason, "unknown")
-        XCTAssertEqual(_number, 0)
     }
     func testGet() throws {
         let urlString = "'http://localhost:\(port)/api/v1/get?user=\("guest anonymous".urlEncoded)&timeout=\("^600".urlEncoded)'"
