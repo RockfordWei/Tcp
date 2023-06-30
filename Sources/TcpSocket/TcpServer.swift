@@ -55,13 +55,21 @@ public extension TcpSocket {
             group.remove(self)
         }
         guard let delegate = delegate else { return }
-        for client in group {
-            if let queue = queue {
-                queue.async {
+        if #available(macOS 10.15, *) {
+            for client in group {
+                Task {
                     delegate.onDataArrival(tcpSocket: client)
                 }
-            } else {
-                delegate.onDataArrival(tcpSocket: client)
+            }
+        } else {
+            for client in group {
+                if let queue = queue {
+                    queue.async {
+                        delegate.onDataArrival(tcpSocket: client)
+                    }
+                } else {
+                    delegate.onDataArrival(tcpSocket: client)
+                }
             }
         }
     }

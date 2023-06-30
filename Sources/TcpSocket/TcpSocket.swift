@@ -123,7 +123,7 @@ public extension TcpSocket {
 }
 
 public extension TcpSocket {
-    func connect(to ipAddress: String, with port: UInt16) throws {
+    func connect(to ipAddress: String = "0.0.0.0", with port: UInt16) throws {
         let result = Self.withAddress(ipAddress: ipAddress, port: port) { pointer, size -> Int32 in
             #if os(Linux)
             return Glibc.connect(self._socket, pointer, size)
@@ -132,6 +132,19 @@ public extension TcpSocket {
             #endif
         }
         try TcpContext.assert(result: result, context: .connect)
+    }
+    @available(macOS 10.15, *)
+    func asyncConnect(to ipAddress: String = "0.0.0.0", with port: UInt16) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                do {
+                    try self.connect(to: ipAddress, with: port)
+                    continuation.resume(returning: ())
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 }
 
@@ -186,6 +199,23 @@ public extension TcpSocket {
         }
         try TcpContext.assert(result: Int32(result), context: .receive)
         return data[0..<result]
+    }
+    @available(macOS 10.15, *)
+    func receive(bufferSize: Int = 4096, until: @escaping (Data) -> Bool) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                do {
+                    var data = Data()
+                    repeat {
+                        let partial = try self.recv(bufferSize: bufferSize)
+                        data.append(partial)
+                    } while !until(data)
+                    continuation.resume(returning: data)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 }
 
