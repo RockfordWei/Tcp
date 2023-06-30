@@ -104,7 +104,6 @@ public enum TcpContext: String {
         ],
         .sendFile: [
             EAGAIN: "The socket is marked for non-blocking I/O and not all data was sent due to the socket buffer being full.  If specified, the number of bytes successfully sent will be returned in *len.",
-            ENOTSUP: "The fd argument does not refer to a regular file.",
             EBADF: "The s argument is not a valid socket descriptor.",
             EFAULT: "An invalid address was specified for an argument.",
             EINTR: "A signal interrupted sendfile() before it could be completed.  If specified, the number of bytes success-fully successfully fully sent will be returned in *len.",

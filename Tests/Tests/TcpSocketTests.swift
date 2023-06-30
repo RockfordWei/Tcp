@@ -121,8 +121,24 @@ final class TcpSocketTests: XCTestCase {
         try server.listen()
         server.serve(wait: false)
         let client = try TcpSocket()
-        try client.connect(to: "0.0.0.0", with: port)
+        try client.connect(with: port)
         try client.send(text: ipAddress)
+    }
+    @available(macOS 10.15, *)
+    func testAsyncReceive() async throws {
+        let port = UInt16.random(in: 60000..<65535)
+        let server = try FixDataServer()
+        server.delegate = server
+        try server.bind(port: port)
+        try server.listen()
+        Task {
+            server.serve()
+        }
+        let client = try TcpSocket()
+        try await client.asyncConnect(with: port)
+        try client.send(text: server.incomingPackage)
+        let data = try await client.receive { $0.count == server.outgoingPackageSize }
+        XCTAssertEqual(data.count, server.outgoingPackageSize)
     }
     func testErrors() throws {
         let reason = UUID().uuidString
@@ -179,6 +195,8 @@ final class TcpSocketTests: XCTestCase {
         XCTAssertEqual(data, Data(Self.randomBytes))
     }
     static var allTests = [
+        ("testSocket", testSocket),
+        ("testErrors", testErrors),
         ("testGet", testGet),
         ("testPostParameters", testPostParameters),
         ("testPostFiles", testPostFiles),
@@ -204,5 +222,21 @@ private extension String {
             let x = UInt8.random(in: 0..<255)
             return "\(x)"
         }.joined(separator: ".")
+    }
+}
+final class FixDataServer: TcpSocket, TcpSocketDelegate {
+    public let incomingPackage = UUID().uuidString
+    public let outgoingPackageSize = 1048576
+    func onDataArrival(tcpSocket: TcpSocket) {
+        do {
+            let incoming = try tcpSocket.recv()
+            XCTAssertEqual(incoming.count, incomingPackage.count)
+            try tcpSocket.send(data: Data(repeating: UInt8.random(in: 0..<255), count: outgoingPackageSize))
+        } catch {
+            XCTFail("\(error)")
+        }
+        tcpSocket.shutdown()
+        tcpSocket.close()
+        tcpSocket.live = false
     }
 }
