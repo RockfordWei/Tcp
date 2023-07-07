@@ -7,10 +7,19 @@
 
 import Foundation
 
+public typealias HttpHandler = (_ request: HttpRequest) throws -> HttpResponse?
+
 public struct HttpRoute: Hashable {
     public let api: String
     public let method: HttpRequest.Method
-    public let handler: (_ request: HttpRequest) throws -> HttpResponse?
+    public let handler: HttpHandler
+    
+    public init(api: String, method: HttpRequest.Method, handler: @escaping HttpHandler) {
+        self.api = api
+        self.method = method
+        self.handler = handler
+    }
+
     public static func == (lhs: Self, rhs: Self) -> Bool {
         return lhs.api == rhs.api && lhs.method == rhs.method
     }
