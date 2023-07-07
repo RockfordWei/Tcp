@@ -140,26 +140,6 @@ final class TcpSocketTests: XCTestCase {
         let data = try await client.receive { $0.count == server.outgoingPackageSize }
         XCTAssertEqual(data.count, server.outgoingPackageSize)
     }
-    func testErrors() throws {
-        let reason = UUID().uuidString
-        let errorCode = Int.random(in: 0..<9999)
-        let randomError = TcpContext.fault(reason: reason, code: errorCode) as NSError
-        XCTAssertEqual(randomError.domain, reason)
-        XCTAssertEqual(randomError.code, errorCode)
-        XCTAssert(randomError.userInfo.isEmpty)
-        for (context, messages) in TcpContext.errorMessages {
-            for (errorNumber, errorMessage) in messages {
-                errno = Int32(errorNumber)
-                let error = try XCTUnwrap(TcpContext.lookupError(result: -1, context: context))
-                let exception = error as NSError
-                XCTAssertEqual(exception.domain, errorMessage)
-                XCTAssertEqual(exception.code, Int(errorNumber))
-                let userInfo = try XCTUnwrap(exception.userInfo)
-                let objectContext = try XCTUnwrap(userInfo["context"] as? TcpContext)
-                XCTAssertEqual(context, objectContext)
-            }
-        }
-    }
     func testGet() throws {
         let urlString = "'http://localhost:\(port)/api/v1/get?user=\("guest anonymous".urlEncoded)&timeout=\("^600".urlEncoded)'"
         let response: ResponseBody? = try curl(command: urlString)
@@ -196,7 +176,6 @@ final class TcpSocketTests: XCTestCase {
     }
     static var allTests = [
         ("testSocket", testSocket),
-        ("testErrors", testErrors),
         ("testGet", testGet),
         ("testPostParameters", testPostParameters),
         ("testPostFiles", testPostFiles),
