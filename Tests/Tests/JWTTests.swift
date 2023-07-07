@@ -18,7 +18,11 @@ final class JWTTests: XCTestCase {
         let algorithm = algo.rawValue.replacingOccurrences(of: "SHA", with: "")
         process.standardOutput = stdOut
         process.standardError = stdErr
+        #if os(Linux)
         process.arguments = ["-a", algorithm]
+        #else
+        process.arguments = ["-a", algorithm, "-b"] // using binary mode for shasum to avoid unexpected errors.
+        #endif
         process.executableURL = URL(string: "file:///usr/bin/shasum")
         process.standardInput = stdInp
         stdInp.fileHandleForWriting.write(input)
@@ -27,12 +31,9 @@ final class JWTTests: XCTestCase {
         process.waitUntilExit()
         let errData = stdErr.fileHandleForReading.readDataToEndOfFile()
         try stdErr.fileHandleForReading.close()
-        if !errData.isEmpty {
-            if let errText = String(data: errData, encoding: .utf8) {
-                throw NSError(domain: errText, code: 0, userInfo: nil)
-            } else {
-                throw NSError(domain: "error", code: 0, userInfo: ["data": errData])
-            }
+        guard errData.isEmpty else {
+            let errText = String(data: errData, encoding: .utf8) ?? "error"
+            throw NSError(domain: errText, code: 0, userInfo: nil)
         }
         let data = stdOut.fileHandleForReading.readDataToEndOfFile()
         try stdOut.fileHandleForReading.close()
@@ -96,7 +97,7 @@ final class JWTTests: XCTestCase {
         let wanted = try getShaHex(input: source, algo: algo)
         NSLog("generated: \(hash)")
         NSLog("expecting: \(wanted)")
-        XCTAssertTrue(wanted.hasPrefix(hash))
+        XCTAssert(wanted.hasPrefix(hash))
         var stream: [Int32] = [0, 0]
         let bytes: [UInt8] = source.map { $0 }
         let streamed = try bytes.withUnsafeBytes { pointer -> String in
