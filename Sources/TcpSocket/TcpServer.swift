@@ -10,7 +10,7 @@ import Foundation
 public extension TcpSocket {
     func listen() throws {
         #if os(Linux)
-        let result = SwiftGlibc.listen(_socket, SOMAXCONN)
+        let result = Glibc.listen(_socket, SOMAXCONN)
         #else
         let result = Darwin.listen(_socket, SOMAXCONN)
         #endif
@@ -22,7 +22,7 @@ public extension TcpSocket {
         var address = sockaddr()
         var size = socklen_t(MemoryLayout.size(ofValue: sockaddr_in()))
         #if os(Linux)
-        let result = SwiftGlibc.accept(self._socket, &address, &size)
+        let result = Glibc.accept(self._socket, &address, &size)
         #else
         let result = Darwin.accept(self._socket, &address, &size)
         #endif
